@@ -127,13 +127,13 @@ function MainLayout() {
   // const db = JSON.parse(localStorage.getItem("ig_clone_users_v1") || "null");
   // console.log("DB:", db);
   // console.log("USERS:", db?.usersById ? Object.values(db.usersById) : []);
-  // console.log("=== DEBUG AUTH USER ===", authUser);
-  // console.log("=== DEBUG ALL USER IDS ===", allUserIds);
-  // console.log("=== DEBUG USERS MAP ===", usersById);
-  // console.log(
-  //   "=== DEBUG LOCAL STORAGE ===",
-  //   localStorage.getItem("ig_clone_users_v1"),
-  // );
+  console.log("=== DEBUG AUTH USER ===", authUser);
+  console.log("=== DEBUG ALL USER IDS ===", allUserIds);
+  console.log("=== DEBUG USERS MAP ===", usersById);
+  console.log(
+    "=== DEBUG LOCAL STORAGE ===",
+    localStorage.getItem("ig_clone_users_v1"),
+  );
   function handleLogout() {
     dispatch(logout());
     clearSession();
