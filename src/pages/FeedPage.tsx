@@ -19,8 +19,86 @@ const STORIES: ReadonlyArray<Story> = [
   { id: "s3", username: "emma", avatarUrl: "https://i.pravatar.cc/100?u=emma" },
   { id: "s4", username: "zain", avatarUrl: "https://i.pravatar.cc/100?u=zain" },
   { id: "s5", username: "alex", avatarUrl: "https://i.pravatar.cc/100?u=alex" },
+  { id: "s6", username: "sara", avatarUrl: "https://i.pravatar.cc/100?u=sara" },
+  { id: "s7", username: "mike", avatarUrl: "https://i.pravatar.cc/100?u=mike" },
 ];
 
+// ── Instagram gradient ─────────────────────────────────────────────────────
+const IG_GRADIENT =
+  "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)";
+
+// ── Story ring wrapper ─────────────────────────────────────────────────────
+function StoryRing({
+  children,
+  active = true,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+}) {
+  return (
+    <div
+      className="size-full rounded-full p-[2.5px]"
+      style={{ background: active ? IG_GRADIENT : "#e5e7eb" }}
+    >
+      <div className="size-full rounded-full bg-white p-[2.5px]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Stories bar ────────────────────────────────────────────────────────────
+function StoriesBar({ stories }: { stories: ReadonlyArray<Story> }) {
+  return (
+    <section className="border-b border-zinc-200 bg-white px-4 py-4 md:px-4">
+      <div
+        className="flex gap-5 overflow-x-auto pb-1"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {stories.map((story, i) => (
+          <button
+            key={story.id}
+            type="button"
+            className="flex shrink-0 flex-col items-center gap-1.5 transition-opacity active:opacity-70"
+          >
+            <div className="relative size-16">
+              {i === 0 ? (
+                /* Your story */
+                <>
+                  <div className="size-full rounded-full ring-1 ring-zinc-300 overflow-hidden">
+                    <Avatar className="size-full">
+                      <AvatarImage src={story.avatarUrl} alt={story.username} />
+                      <AvatarFallback className="text-sm">
+                        {story.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+                  <span className="absolute -bottom-0.5 right-0 flex size-5 items-center justify-center rounded-full bg-blue-500 text-[13px] font-bold text-white ring-2 ring-white leading-none">
+                    +
+                  </span>
+                </>
+              ) : (
+                <StoryRing>
+                  <Avatar className="size-full">
+                    <AvatarImage src={story.avatarUrl} alt={story.username} />
+                    <AvatarFallback className="text-sm">
+                      {story.username.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </StoryRing>
+              )}
+            </div>
+            <p className="max-w-[64px] truncate text-[11.5px] text-zinc-700 font-normal">
+              {i === 0 ? "Your story" : story.username}
+            </p>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Post card ──────────────────────────────────────────────────────────────
 type PostCardProps = {
   post: FeedPost;
   onToggleLike: (postId: string) => void;
@@ -29,65 +107,80 @@ type PostCardProps = {
 
 function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
   const [commentInput, setCommentInput] = useState<string>("");
+  const [heartBurst, setHeartBurst] = useState(false);
+
+  function handleDoubleTap() {
+    if (!post.isLiked) onToggleLike(post.id);
+    setHeartBurst(true);
+    setTimeout(() => setHeartBurst(false), 800);
+  }
 
   return (
     <article className="border-b border-zinc-200 bg-white">
-      <div className="flex items-center justify-between px-3 py-3 md:px-0">
+      {/* ── Post header ── */}
+      <div className="flex items-center justify-between px-4 py-3 md:px-3">
         <div className="flex items-center gap-2.5">
+          {/* Story-ring avatar */}
           <div className="relative size-9 shrink-0">
-            <div
-              className="absolute inset-0 rounded-full"
-              style={{
-                background:
-                  "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-                padding: "2px",
-              }}
-            >
-              <div className="size-full rounded-full bg-white p-[2px]">
-                <Avatar className="size-full">
-                  <AvatarImage src={post.avatarUrl} alt={post.username} />
-                  <AvatarFallback className="text-xs">
-                    {post.username.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
-            </div>
+            <StoryRing>
+              <Avatar className="size-full">
+                <AvatarImage src={post.avatarUrl} alt={post.username} />
+                <AvatarFallback className="text-[10px]">
+                  {post.username.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </StoryRing>
           </div>
 
           <div>
-            <p className="text-[13.5px] font-semibold leading-tight">
+            <p className="text-[13.5px] font-semibold leading-tight hover:underline cursor-pointer">
               {post.username}
             </p>
-            {post.location ? (
+            {post.location && (
               <p className="text-[11px] leading-tight text-zinc-500">
                 {post.location}
               </p>
-            ) : null}
+            )}
           </div>
         </div>
 
         <button
           type="button"
           aria-label="Post options"
-          className="rounded-full p-1.5 transition hover:bg-zinc-100 active:scale-90"
+          className="rounded-full p-1.5 text-zinc-700 transition hover:bg-zinc-100 active:scale-90"
         >
           <MoreHorizontal size={20} strokeWidth={1.8} />
         </button>
       </div>
 
-      <div className="w-full overflow-hidden">
+      {/* ── Post image (responsive + double-tap) ── */}
+      <div
+        className="relative w-full overflow-hidden bg-zinc-100"
+        onDoubleClick={handleDoubleTap}
+      >
         <img
           src={post.imageUrl}
           alt={post.caption}
-          className="aspect-square w-full select-none object-cover"
+          className="w-full object-cover select-none"
+          style={{ aspectRatio: "1 / 1" }}
           draggable={false}
-          onDoubleClick={() => onToggleLike(post.id)}
         />
+        {/* Double-tap heart burst */}
+        {heartBurst && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <Heart
+              size={90}
+              className="fill-white stroke-white opacity-0 animate-[heartPop_0.8s_ease-out_forwards]"
+            />
+          </div>
+        )}
       </div>
 
-      <div className="px-3 pb-1 pt-2.5 md:px-0">
+      {/* ── Actions ── */}
+      <div className="px-4 pb-1 pt-3 md:px-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3.5">
+            {/* Like */}
             <button
               type="button"
               onClick={() => onToggleLike(post.id)}
@@ -105,31 +198,34 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
               />
             </button>
 
+            {/* Comment */}
             <button
               type="button"
               aria-label="Comment"
-              className="group rounded-full p-0.5 transition hover:text-zinc-600 active:scale-90"
+              className="group rounded-full p-0.5 transition active:scale-90"
             >
               <MessageCircle
                 size={26}
                 strokeWidth={1.8}
-                className="group-hover:stroke-zinc-500"
+                className="group-hover:stroke-zinc-500 transition-colors"
               />
             </button>
 
+            {/* Share */}
             <button
               type="button"
               aria-label="Share"
-              className="group rounded-full p-0.5 transition hover:text-zinc-600 active:scale-90"
+              className="group rounded-full p-0.5 transition active:scale-90"
             >
               <Send
                 size={24}
                 strokeWidth={1.8}
-                className="-rotate-12 group-hover:stroke-zinc-500"
+                className="-rotate-12 group-hover:stroke-zinc-500 transition-colors"
               />
             </button>
           </div>
 
+          {/* Save */}
           <button
             type="button"
             onClick={() => onToggleSave(post.id)}
@@ -148,31 +244,37 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
           </button>
         </div>
 
-        <p className="mt-1.5 text-[13.5px] font-semibold">
+        {/* Likes count */}
+        <p className="mt-2 text-[13.5px] font-semibold">
           {post.likesCount.toLocaleString()} likes
         </p>
 
+        {/* Caption */}
         <p className="mt-0.5 text-[13.5px] leading-snug">
-          <span className="mr-1.5 font-semibold">{post.username}</span>
-          {post.caption}
+          <span className="mr-1.5 font-semibold cursor-pointer hover:underline">
+            {post.username}
+          </span>
+          <span className="text-zinc-800">{post.caption}</span>
         </p>
 
-        {post.commentsCount > 0 ? (
+        {/* Comments */}
+        {post.commentsCount > 0 && (
           <button
             type="button"
-            className="mt-1 text-[13.5px] text-zinc-500 transition hover:text-zinc-700"
+            className="mt-1 block text-[13.5px] text-zinc-400 transition hover:text-zinc-600"
           >
             View all {post.commentsCount} comments
           </button>
-        ) : null}
+        )}
 
+        {/* Add comment */}
         <div className="mt-2 flex items-center gap-2 border-t border-zinc-100 pt-2.5">
           <input
             type="text"
             value={commentInput}
             onChange={(e) => setCommentInput(e.target.value)}
             placeholder="Add a comment…"
-            className="flex-1 bg-transparent text-[13.5px] text-zinc-900 outline-none placeholder:text-zinc-400"
+            className="flex-1 bg-transparent text-[13.5px] text-zinc-900 outline-none placeholder:text-zinc-400 caret-zinc-700"
           />
           <button
             type="button"
@@ -180,18 +282,19 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
           >
             <Smile size={18} strokeWidth={1.8} />
           </button>
-          {commentInput.trim() ? (
+          {commentInput.trim() && (
             <button
               type="button"
               onClick={() => setCommentInput("")}
-              className="shrink-0 text-[13px] font-semibold text-blue-500 transition hover:text-blue-700"
+              className="shrink-0 text-[13px] font-semibold text-blue-500 transition hover:text-blue-700 active:scale-95"
             >
               Post
             </button>
-          ) : null}
+          )}
         </div>
 
-        <p className="mt-1 pb-2.5 text-[11px] uppercase tracking-wide text-zinc-400">
+        {/* Timestamp */}
+        <p className="mt-1 pb-3 text-[11px] uppercase tracking-wide text-zinc-400">
           {post.postedAtLabel}
         </p>
       </div>
@@ -199,13 +302,14 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
   );
 }
 
+// ── Feed page ──────────────────────────────────────────────────────────────
 function FeedPage() {
   const dispatch = useAppDispatch();
 
   const posts = useAppSelector((state) =>
     state.posts.feedPostIds
       .map((id) => state.posts.postsById[id])
-      .filter((post): post is FeedPost => Boolean(post))
+      .filter((post): post is FeedPost => Boolean(post)),
   );
 
   function handleToggleLike(postId: string) {
@@ -217,69 +321,51 @@ function FeedPage() {
   }
 
   return (
-    <div className="w-full pb-20 md:pb-6">
-      <section className="border-b border-zinc-200 bg-white px-3 py-3 md:px-0">
-        <div className="scrollbar-none flex gap-4 overflow-x-auto pb-1">
-          {STORIES.map((story, i) => (
-            <button
-              type="button"
-              key={story.id}
-              className="flex min-w-[66px] flex-col items-center gap-1.5 transition active:opacity-75"
-            >
-              <div className="relative size-[66px] shrink-0">
-                {i === 0 ? (
-                  <div className="flex size-full items-center justify-center overflow-hidden rounded-full ring-[1.5px] ring-zinc-300 ring-offset-1">
-                    <Avatar className="size-full">
-                      <AvatarImage src={story.avatarUrl} alt={story.username} />
-                      <AvatarFallback className="text-sm">
-                        {story.username.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="absolute bottom-0 right-0 flex size-[20px] items-center justify-center rounded-full bg-blue-500 text-sm font-bold leading-none text-white ring-2 ring-white">
-                      +
-                    </span>
-                  </div>
-                ) : (
-                  <div
-                    className="size-full rounded-full p-[2.5px]"
-                    style={{
-                      background:
-                        "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-                    }}
-                  >
-                    <div className="size-full rounded-full bg-white p-[2.5px]">
-                      <Avatar className="size-full">
-                        <AvatarImage
-                          src={story.avatarUrl}
-                          alt={story.username}
-                        />
-                        <AvatarFallback className="text-sm">
-                          {story.username.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <p className="max-w-[66px] truncate text-[11.5px] text-zinc-700">
-                {i === 0 ? "Your story" : story.username}
-              </p>
-            </button>
-          ))}
-        </div>
-      </section>
+    <>
+      {/* Heart burst animation */}
+      <style>{`
+        @keyframes heartPop {
+          0%   { opacity: 0;   transform: scale(0.4); }
+          30%  { opacity: 1;   transform: scale(1.15); }
+          60%  { opacity: 1;   transform: scale(1); }
+          100% { opacity: 0;   transform: scale(1.05); }
+        }
+      `}</style>
 
-      <div className="mt-0">
-        {posts.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            onToggleLike={handleToggleLike}
-            onToggleSave={handleToggleSave}
-          />
-        ))}
+      <div className="w-full max-w-[470px] mx-auto">
+        {/* Stories */}
+        <StoriesBar stories={STORIES} />
+
+        {/* Posts */}
+        <div>
+          {posts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center px-6">
+              <div
+                className="mb-5 flex size-20 items-center justify-center rounded-full"
+                style={{ background: IG_GRADIENT }}
+              >
+                <Heart size={36} className="fill-white stroke-none" />
+              </div>
+              <p className="text-xl font-semibold text-zinc-900">
+                No posts yet
+              </p>
+              <p className="mt-1.5 text-sm text-zinc-500">
+                Follow people to see their photos and videos here.
+              </p>
+            </div>
+          ) : (
+            posts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onToggleLike={handleToggleLike}
+                onToggleSave={handleToggleSave}
+              />
+            ))
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
