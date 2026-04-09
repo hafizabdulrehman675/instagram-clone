@@ -1,5 +1,6 @@
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useFormik } from "formik";
+import * as Yup from "yup";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -7,154 +8,288 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { saveSession } from "@/lib/session";
-import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { loginSuccess } from "@/features/auth/redux/authSlice";
-import type { AuthUser } from "@/features/auth/types";
 
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { registerUser } from "@/features/users/redux/usersSlice";
 import type { UserRecord } from "@/features/users/types";
 
+// ── Yup validation schema ──────────────────────────────────────────────────
+const SignupSchema = Yup.object({
+  fullName: Yup.string()
+    .trim()
+    .min(2, "Full name must be at least 2 characters.")
+    .required("Full name is required."),
+  username: Yup.string()
+    .trim()
+    .min(3, "Username must be at least 3 characters.")
+    .matches(/^[a-zA-Z0-9_.]+$/, "Only letters, numbers, _ and . allowed.")
+    .required("Username is required."),
+  email: Yup.string()
+    .trim()
+    .email("Enter a valid email address.")
+    .required("Email is required."),
+  password: Yup.string()
+    .min(6, "Password must be at least 6 characters.")
+    .required("Password is required."),
+});
+
+// ── Left‑side decorative phone mockup ─────────────────────────────────────
+function PhoneMockup() {
+  return (
+    <div className="relative w-[260px] h-[380px] select-none">
+      {/* Back phone */}
+      <div className="absolute top-6 left-0 w-[210px] h-[340px] rounded-3xl bg-white border border-zinc-200 shadow-2xl rotate-[-6deg] overflow-hidden">
+        <div className="w-full h-full bg-gradient-to-br from-pink-100 via-purple-50 to-orange-100" />
+      </div>
+      {/* Front phone */}
+      <div className="absolute top-0 left-12 w-[210px] h-[360px] rounded-3xl bg-white border border-zinc-200 shadow-2xl overflow-hidden">
+        <div className="w-full h-10 bg-zinc-50 flex items-center px-4 gap-2 border-b border-zinc-100">
+          <div className="w-2 h-2 rounded-full bg-pink-400" />
+          <div className="w-2 h-2 rounded-full bg-yellow-400" />
+          <div className="w-2 h-2 rounded-full bg-green-400" />
+        </div>
+        <div className="p-3 space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="rounded-xl overflow-hidden"
+              style={{ height: i === 1 ? 120 : 80 }}
+            >
+              <div
+                className={`w-full h-full ${
+                  i === 1
+                    ? "bg-gradient-to-br from-rose-300 to-pink-500"
+                    : i === 2
+                      ? "bg-gradient-to-br from-violet-300 to-purple-500"
+                      : "bg-gradient-to-br from-orange-200 to-amber-400"
+                }`}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 function SignupPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-
   const usersById = useAppSelector((s) => s.users.usersById);
 
-  const [fullName, setFullName] = useState<string>("");
-  const [username, setUsername] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
+  const formik = useFormik({
+    initialValues: {
+      fullName: "",
+      username: "",
+      email: "",
+      password: "",
+    },
+    validationSchema: SignupSchema,
+    onSubmit: (values, { setFieldError, setSubmitting }) => {
+      const existingUsers: UserRecord[] = Object.values(usersById);
 
-  const [error, setError] = useState<string | null>(null);
+      if (existingUsers.some((u) => u.username === values.username.trim())) {
+        setFieldError("username", "Username already taken. Try another.");
+        setSubmitting(false);
+        return;
+      }
 
-  function handleSignup() {
-    setError(null);
+      if (existingUsers.some((u) => u.email === values.email.trim())) {
+        setFieldError("email", "Email already registered. Try another.");
+        setSubmitting(false);
+        return;
+      }
 
-    const trimmedUsername = username.trim();
-    const trimmedEmail = email.trim();
-    const trimmedFullName = fullName.trim();
+      const newUserId = `u_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-    if (!trimmedUsername || !trimmedEmail || !trimmedFullName || !password) {
-      setError("Please fill all fields.");
-      return;
-    }
+      const newUserRecord: UserRecord = {
+        id: newUserId,
+        username: values.username.trim(),
+        fullName: values.fullName.trim(),
+        email: values.email.trim(),
+        avatarUrl: `https://i.pravatar.cc/100?u=${encodeURIComponent(values.username.trim())}`,
+        password: values.password,
+      };
 
-    const existingUsers: UserRecord[] = Object.values(usersById);
+      dispatch(registerUser(newUserRecord));
+      navigate("/login");
+    },
+  });
 
-    const usernameExists = existingUsers.some(
-      (u) => u.username === trimmedUsername
-    );
-    const emailExists = existingUsers.some((u) => u.email === trimmedEmail);
-
-    if (usernameExists) {
-      setError("Username already exists. Try another.");
-      return;
-    }
-
-    if (emailExists) {
-      setError("Email already exists. Try another.");
-      return;
-    }
-
-    const newUserId = `u_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
-    const newUserRecord: UserRecord = {
-      id: newUserId,
-      username: trimmedUsername,
-      fullName: trimmedFullName,
-      email: trimmedEmail,
-      avatarUrl: `https://i.pravatar.cc/100?u=${encodeURIComponent(
-        trimmedUsername
-      )}`,
-      password,
-    };
-
-    dispatch(registerUser(newUserRecord));
-
-    // const authUser: AuthUser = {
-    //   id: newUserRecord.id,
-    //   username: newUserRecord.username,
-    //   fullName: newUserRecord.fullName,
-    //   email: newUserRecord.email,
-    //   avatarUrl: newUserRecord.avatarUrl,
-    // };
-
-    // dispatch(loginSuccess(authUser));
-    // saveSession(authUser.id);
-    navigate("/login");
-  }
+  // Helper: show error only after field has been touched
+  const fieldError = (name: keyof typeof formik.values) =>
+    formik.touched[name] && formik.errors[name]
+      ? formik.errors[name]
+      : undefined;
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-center text-2xl">Sign up</CardTitle>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="signup-fullname">Full name</Label>
-          <Input
-            id="signup-fullname"
-            placeholder="Enter full name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-          />
+    <div className="flex items-start justify-center bg-white border border-zinc-200 lg:border-l-0 rounded-2xl lg:rounded-l-none lg:rounded-r-2xl px-8 py-4 md:col-span-3">
+      <div className="w-full space-y-6">
+        {/* Instagram wordmark */}
+        <div className="flex justify-center">
+          <span
+            className="text-4xl font-semibold tracking-tight text-zinc-900"
+            style={{ fontFamily: "'Grand Hotel', cursive" }}
+          >
+            Instagram
+          </span>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="signup-username">Username</Label>
-          <Input
-            id="signup-username"
-            placeholder="Choose username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
+        <p className="text-center text-sm font-semibold text-zinc-500 px-4 pb-4">
+          Sign up to see photos and videos from your friends.
+        </p>
+
+        {/* Google font for wordmark */}
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Grand+Hotel&display=swap');`}</style>
+
+        {/* ── Form ──────────────────────────────────────────────── */}
+        <div className="space-y-3">
+          {/* Full name */}
+          <div className="flex gap-1.5">
+            <Input
+              id="signup-fullname"
+              placeholder="Full name"
+              className={`bg-zinc-50 border-zinc-300 text-sm h-10 ${
+                fieldError("fullName")
+                  ? "border-red-400 focus-visible:ring-red-300"
+                  : ""
+              }`}
+              value={formik.values.fullName}
+              onChange={formik.handleChange("fullName")}
+              onBlur={formik.handleBlur("fullName")}
+            />
+            {fieldError("fullName") && (
+              <p className="mt-1 text-sm text-red-500">
+                {fieldError("fullName")}
+              </p>
+            )}
+          </div>
+
+          {/* Username */}
+          <div className="flex gap-1.5">
+            <Input
+              id="signup-username"
+              placeholder="Username"
+              className={`bg-zinc-50 border-zinc-300 text-sm h-10 ${
+                fieldError("username")
+                  ? "border-red-400 focus-visible:ring-red-300"
+                  : ""
+              }`}
+              value={formik.values.username}
+              onChange={formik.handleChange("username")}
+              onBlur={formik.handleBlur("username")}
+            />
+            {fieldError("username") && (
+              <p className="mt-1 text-sm text-red-500">
+                {fieldError("username")}
+              </p>
+            )}
+          </div>
+
+          {/* Email */}
+          <div className="flex gap-1.5">
+            <Input
+              id="signup-email"
+              type="email"
+              placeholder="Mobile number or email"
+              className={`bg-zinc-50 border-zinc-300 text-sm h-10 ${
+                fieldError("email")
+                  ? "border-red-400 focus-visible:ring-red-300"
+                  : ""
+              }`}
+              value={formik.values.email}
+              onChange={formik.handleChange("email")}
+              onBlur={formik.handleBlur("email")}
+            />
+            {fieldError("email") && (
+              <p className="mt-1 text-sm text-red-500">{fieldError("email")}</p>
+            )}
+          </div>
+
+          {/* Password */}
+          <div className="flex gap-1.5">
+            <Input
+              id="signup-password"
+              type="password"
+              placeholder="Password"
+              className={`bg-zinc-50 border-zinc-300 text-sm h-10 ${
+                fieldError("password")
+                  ? "border-red-400 focus-visible:ring-red-300"
+                  : ""
+              }`}
+              value={formik.values.password}
+              onChange={formik.handleChange("password")}
+              onBlur={formik.handleBlur("password")}
+            />
+            {fieldError("password") && (
+              <p className="mt-1 text-sm text-red-500">
+                {fieldError("password")}
+              </p>
+            )}
+          </div>
+
+          {/* Terms notice */}
+          <p className="text-center text-xs text-zinc-500 px-2 pb-4">
+            By signing up, you agree to our{" "}
+            <span className="font-semibold text-zinc-700 cursor-pointer hover:underline">
+              Terms
+            </span>
+            ,{" "}
+            <span className="font-semibold text-zinc-700 cursor-pointer hover:underline">
+              Privacy Policy
+            </span>{" "}
+            and{" "}
+            <span className="font-semibold text-zinc-700 cursor-pointer hover:underline">
+              Cookies Policy
+            </span>
+            .
+          </p>
+
+          {/* Submit */}
+          <Button
+            type="button"
+            className="w-full h-9 text-sm font-semibold bg-blue-400 hover:bg-blue-500 text-white rounded-lg disabled:opacity-60"
+            onClick={() => formik.handleSubmit()}
+            disabled={formik.isSubmitting || !formik.dirty}
+          >
+            {formik.isSubmitting ? "Signing up…" : "Sign up"}
+          </Button>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="signup-email">Email</Label>
-          <Input
-            id="signup-email"
-            type="email"
-            placeholder="Enter email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        {/* ── Divider ───────────────────────────────────────────── */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-zinc-200" />
+          <span className="text-xs font-semibold text-zinc-400">OR</span>
+          <div className="flex-1 h-px bg-zinc-200" />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="signup-password">Password</Label>
-          <Input
-            id="signup-password"
-            type="password"
-            placeholder="Create password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-        <Button className="w-full" type="button" onClick={handleSignup}>
-          Sign up
-        </Button>
-      </CardContent>
-
-      <CardFooter className="justify-center text-sm text-zinc-600">
-        Already have an account?{" "}
-        <Link
-          to="/login"
-          className="ml-1 font-medium text-blue-600 hover:underline"
+        {/* Log in with Facebook */}
+        <button
+          type="button"
+          className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-[#385185] hover:text-blue-800 transition-colors"
         >
-          Log in
-        </Link>
-      </CardFooter>
-    </Card>
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.235 2.686.235v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z" />
+          </svg>
+          Log in with Facebook
+        </button>
+
+        {/* Already have account */}
+        <p className="text-center text-sm text-zinc-600">
+          Have an account?{" "}
+          <Link
+            to="/login"
+            className="font-semibold text-blue-500 hover:underline"
+          >
+            Log in
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }
 
