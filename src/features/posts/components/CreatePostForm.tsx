@@ -44,6 +44,7 @@ function CreatePostForm({ onSuccess, onCancel }: CreatePostFormProps) {
       likesCount: 0,
       caption: caption.trim(),
       commentsCount: 0,
+      comments: [],
       postedAtLabel: "JUST NOW",
       isLiked: false,
       isSaved: false,

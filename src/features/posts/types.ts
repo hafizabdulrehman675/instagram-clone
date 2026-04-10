@@ -4,6 +4,15 @@ export type Story = {
   avatarUrl: string;
 };
 
+export type PostComment = {
+  id: string;
+  parentId: string | null;
+  username: string;
+  avatarUrl: string;
+  text: string;
+  postedAtLabel: string;
+};
+
 export type FeedPost = {
   id: string;
   username: string;
@@ -13,6 +22,7 @@ export type FeedPost = {
   likesCount: number;
   caption: string;
   commentsCount: number;
+  comments: PostComment[];
   postedAtLabel: string;
   isLiked: boolean;
   isSaved: boolean;
