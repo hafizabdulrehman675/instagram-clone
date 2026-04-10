@@ -27,7 +27,11 @@ export const router = createBrowserRouter([
           { path: "create", element: <CreatePostPage /> },
           { path: "explore", element: <ExplorePage /> },
           { path: "notifications", element: <NotificationsPage /> },
-          { path: "messages", element: <MessagesPage /> },
+          {
+            path: "messages",
+            element: <MessagesPage />,
+            handle: { hideRightSidebar: true },
+          },
         ],
       },
     ],

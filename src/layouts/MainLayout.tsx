@@ -16,6 +16,7 @@ import {
   NavLink,
   Outlet,
   useLocation,
+  useMatches,
   useNavigate,
 } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
@@ -38,6 +39,7 @@ import {
 import { setActiveModal } from "@/features/ui/redux/uiSlice";
 import CreatePostForm from "@/features/posts/components/CreatePostForm";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { label: "Home", icon: House, to: "/" },
   { label: "Search", icon: Search, to: "/search" },
@@ -121,8 +123,12 @@ function MainLayout() {
   const allUserIds = useAppSelector((s) => s.users.allUserIds);
   const activeModal = useAppSelector((s) => s.ui.activeModal);
   const location = useLocation();
+  const matches = useMatches();
   const isCreatePage = location.pathname === "/create";
   const isCreateActive = activeModal === "createPost" || isCreatePage;
+  const hideRightSidebar = matches.some((m) =>
+    Boolean((m.handle as { hideRightSidebar?: boolean })?.hideRightSidebar),
+  );
 
   // const db = JSON.parse(localStorage.getItem("ig_clone_users_v1") || "null");
   // console.log("DB:", db);
@@ -325,98 +331,110 @@ function MainLayout() {
         </aside>
 
         {/* ─── Center feed ─── */}
-        <main className="col-span-12 min-h-screen md:col-span-11 xl:col-span-6 border-r border-zinc-100">
-          <div className="mx-[0px] md:mx-[10px] w-full pb-20 md:pb-6">
+        <main
+          className={cn(
+            "col-span-12 min-h-screen border-r border-zinc-100 md:col-span-11",
+            hideRightSidebar ? "xl:col-span-9" : "xl:col-span-6",
+          )}
+        >
+          <div
+            className={cn(
+              "w-full pb-20 md:pb-6",
+              // hideRightSidebar ? "mx-0" : "mx-0 md:mx-[10px]",
+            )}
+          >
             <Outlet />
           </div>
         </main>
 
         {/* ─── Right sidebar ─── */}
-        <aside className="hidden xl:col-span-3 xl:flex flex-col px-7 py-8">
-          <div className="sticky top-8 space-y-6">
-            {/* Logged-in user widget */}
-            {authUser && (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3.5">
-                  <Avatar className="size-11">
-                    <AvatarImage
-                      src={authUser.avatarUrl}
-                      alt={authUser.username}
-                    />
-                    <AvatarFallback>
-                      {authUser.username.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-semibold leading-snug">
-                      {authUser.username}
-                    </p>
-                    <p className="text-xs text-zinc-500 leading-snug">
-                      {authUser.fullName}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="text-xs font-semibold text-blue-500 hover:text-blue-700 transition active:scale-95"
-                >
-                  Switch
-                </button>
-              </div>
-            )}
-
-            {/* Suggestions */}
-            <div>
-              <div className="mb-3.5 flex items-center justify-between">
-                <p className="text-sm font-semibold text-zinc-500">
-                  Suggested for you
-                </p>
-                <button className="text-xs font-semibold text-zinc-900 hover:text-zinc-500 transition">
-                  See All
-                </button>
-              </div>
-              <div className="space-y-3.5">
-                {SUGGESTIONS.map((s) => (
-                  <div
-                    key={s.username}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="size-8">
-                        <AvatarImage src={s.avatar} alt={s.username} />
-                        <AvatarFallback className="text-xs">
-                          {s.username.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-[13px] font-semibold leading-snug">
-                          {s.username}
-                        </p>
-                        <p className="text-[12px] text-zinc-400 leading-snug">
-                          Suggested for you
-                        </p>
-                      </div>
+        {!hideRightSidebar && (
+          <aside className="hidden xl:col-span-3 xl:flex flex-col px-7 py-8">
+            <div className="sticky top-8 space-y-6">
+              {/* Logged-in user widget */}
+              {authUser && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3.5">
+                    <Avatar className="size-11">
+                      <AvatarImage
+                        src={authUser.avatarUrl}
+                        alt={authUser.username}
+                      />
+                      <AvatarFallback>
+                        {authUser.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-semibold leading-snug">
+                        {authUser.username}
+                      </p>
+                      <p className="text-xs text-zinc-500 leading-snug">
+                        {authUser.fullName}
+                      </p>
                     </div>
-                    <button className="text-xs font-semibold text-blue-500 hover:text-blue-700 transition active:scale-95">
-                      Follow
-                    </button>
                   </div>
-                ))}
+                  <button
+                    onClick={handleLogout}
+                    className="text-xs font-semibold text-blue-500 hover:text-blue-700 transition active:scale-95"
+                  >
+                    Switch
+                  </button>
+                </div>
+              )}
+
+              {/* Suggestions */}
+              <div>
+                <div className="mb-3.5 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-zinc-500">
+                    Suggested for you
+                  </p>
+                  <button className="text-xs font-semibold text-zinc-900 hover:text-zinc-500 transition">
+                    See All
+                  </button>
+                </div>
+                <div className="space-y-3.5">
+                  {SUGGESTIONS.map((s) => (
+                    <div
+                      key={s.username}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="size-8">
+                          <AvatarImage src={s.avatar} alt={s.username} />
+                          <AvatarFallback className="text-xs">
+                            {s.username.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-[13px] font-semibold leading-snug">
+                            {s.username}
+                          </p>
+                          <p className="text-[12px] text-zinc-400 leading-snug">
+                            Suggested for you
+                          </p>
+                        </div>
+                      </div>
+                      <button className="text-xs font-semibold text-blue-500 hover:text-blue-700 transition active:scale-95">
+                        Follow
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  About · Help · Press · API · Jobs · Privacy · Terms ·
+                  Locations · Language · Meta Verified
+                </p>
+                <p className="mt-2 text-[11px] text-zinc-400">
+                  © 2025 Instagram from Meta
+                </p>
               </div>
             </div>
-
-            {/* Footer */}
-            <div>
-              <p className="text-[11px] text-zinc-400 leading-relaxed">
-                About · Help · Press · API · Jobs · Privacy · Terms · Locations
-                · Language · Meta Verified
-              </p>
-              <p className="mt-2 text-[11px] text-zinc-400">
-                © 2025 Instagram from Meta
-              </p>
-            </div>
-          </div>
-        </aside>
+          </aside>
+        )}
       </div>
       <Dialog
         open={activeModal === "createPost"}

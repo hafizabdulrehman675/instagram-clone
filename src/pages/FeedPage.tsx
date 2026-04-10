@@ -161,8 +161,8 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
         <img
           src={post.imageUrl}
           alt={post.caption}
-          className="w-full object-cover select-none"
-          style={{ aspectRatio: "1 / 1" }}
+          className="max-h-[400px] w-full object-fill select-none"
+          // style={{ aspectRatio: "1 / 1" }}
           draggable={false}
         />
         {/* Double-tap heart burst */}
@@ -323,16 +323,19 @@ function FeedPage() {
   return (
     <>
       {/* Heart burst animation */}
-      <style>{`
+      {/* <style>{`
         @keyframes heartPop {
           0%   { opacity: 0;   transform: scale(0.4); }
           30%  { opacity: 1;   transform: scale(1.15); }
           60%  { opacity: 1;   transform: scale(1); }
           100% { opacity: 0;   transform: scale(1.05); }
         }
-      `}</style>
+      `}</style> */}
 
-      <div className="w-full max-w-[470px] mx-auto">
+      <div
+        // className="w-full max-w-[470px] mx-auto"
+        className="w-full mx-auto"
+      >
         {/* Stories */}
         <StoriesBar stories={STORIES} />
 
