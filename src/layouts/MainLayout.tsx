@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   Compass,
   Heart,
@@ -9,6 +10,7 @@ import {
   Film,
 } from "lucide-react";
 import {
+  Link,
   NavLink,
   Outlet,
   useLocation,
@@ -27,6 +29,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { setActiveModal } from "@/features/ui/redux/uiSlice";
+import type { SocialState } from "@/features/social/types";
+import type { UserRecord } from "@/features/users/types";
+import {
+  acceptFollowRequest,
+  cancelFollowRequest,
+  rejectFollowRequest,
+  sendFollowRequest,
+  unfollow,
+} from "@/features/social/redux/socialSlice";
 import CreatePostForm from "@/features/posts/components/CreatePostForm";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -39,33 +50,175 @@ const NAV_ITEMS = [
   { label: "Notifications", icon: Heart, to: "/notifications" },
   { label: "Create", icon: PlusSquare, to: "/create" },
 ];
-const SUGGESTIONS = [
-  {
-    username: "emma_dev",
-    name: "Emma Dev",
-    avatar: "https://i.pravatar.cc/100?img=47",
-  },
-  {
-    username: "ali.codes",
-    name: "Ali Ahmed",
-    avatar: "https://i.pravatar.cc/100?img=52",
-  },
-  {
-    username: "ui_lover",
-    name: "UI Lover",
-    avatar: "https://i.pravatar.cc/100?img=33",
-  },
-  {
-    username: "reacthub",
-    name: "React Hub",
-    avatar: "https://i.pravatar.cc/100?img=60",
-  },
-  {
-    username: "zain_dev",
-    name: "Zain Dev",
-    avatar: "https://i.pravatar.cc/100?img=55",
-  },
-];
+
+function followRequestId(fromUserId: string, toUserId: string) {
+  return `fr_${fromUserId}_${toUserId}`;
+}
+
+type SuggestedRelation =
+  | { kind: "incoming"; requestId: string }
+  | { kind: "outgoing" }
+  | { kind: "following"; mutual: boolean }
+  | { kind: "none" };
+
+function getSuggestedRelation(
+  authId: string,
+  targetId: string,
+  social: SocialState,
+): SuggestedRelation {
+  const incomingId = followRequestId(targetId, authId);
+  if (social.requestsById[incomingId]?.status === "pending") {
+    return { kind: "incoming", requestId: incomingId };
+  }
+
+  const outgoingId = followRequestId(authId, targetId);
+  if (social.requestsById[outgoingId]?.status === "pending") {
+    return { kind: "outgoing" };
+  }
+
+  const myFollowing = social.followingByUserId[authId] ?? [];
+  if (myFollowing.includes(targetId)) {
+    const theirFollowing = social.followingByUserId[targetId] ?? [];
+    return { kind: "following", mutual: theirFollowing.includes(authId) };
+  }
+
+  return { kind: "none" };
+}
+
+function NotificationBadge({ count }: { count: number }) {
+  if (count < 1) return null;
+  const label = count > 9 ? "9+" : String(count);
+  return (
+    <span
+      className="pointer-events-none absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+      aria-hidden
+    >
+      {label}
+    </span>
+  );
+}
+
+const followActionBlueClass =
+  "h-auto min-h-0 shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-[#0095f6] hover:bg-zinc-100 hover:text-[#0095f6] dark:hover:bg-zinc-800/80";
+const followActionMutedClass =
+  "h-auto min-h-0 shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 dark:text-zinc-200";
+
+function SuggestedUserRow({
+  user: u,
+  authUser,
+  social,
+}: {
+  user: UserRecord;
+  authUser: { id: string; username: string };
+  social: SocialState;
+}) {
+  const dispatch = useAppDispatch();
+  const rel = getSuggestedRelation(authUser.id, u.id, social);
+
+  const subtitle =
+    rel.kind === "incoming" ? "Wants to follow you" : "Suggested for you";
+
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <Link
+        to={`/profile/${encodeURIComponent(u.username)}`}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-0.5 pr-1 transition-colors hover:bg-zinc-50"
+      >
+        <Avatar className="size-8 shrink-0">
+          <AvatarImage src={u.avatarUrl} alt={u.username} />
+          <AvatarFallback className="text-xs">
+            {u.username.slice(0, 2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex flex-col items-start gap-0.5">
+          <p className="truncate text-[13px] font-semibold leading-snug text-zinc-900">
+            {u.username}
+          </p>
+          <p className="truncate text-[12px] leading-snug text-zinc-400">
+            {subtitle}
+          </p>
+        </div>
+      </Link>
+
+      <div className="flex shrink-0 items-center gap-1">
+        {rel.kind === "incoming" ? (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 rounded-md bg-[#0095f6] px-2.5 text-[11px] font-semibold text-white hover:bg-[#1877f2]"
+              onClick={() =>
+                dispatch(acceptFollowRequest({ requestId: rel.requestId }))
+              }
+            >
+              Confirm
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-7 rounded-md px-2.5 text-[11px] font-semibold"
+              onClick={() =>
+                dispatch(rejectFollowRequest({ requestId: rel.requestId }))
+              }
+            >
+              Delete
+            </Button>
+          </>
+        ) : rel.kind === "outgoing" ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className={followActionMutedClass}
+            onClick={() =>
+              dispatch(
+                cancelFollowRequest({
+                  fromUserId: authUser.id,
+                  toUserId: u.id,
+                }),
+              )
+            }
+          >
+            Requested
+          </Button>
+        ) : rel.kind === "following" ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className={followActionMutedClass}
+            onClick={() =>
+              dispatch(
+                unfollow({
+                  followerId: authUser.id,
+                  followingId: u.id,
+                }),
+              )
+            }
+          >
+            {rel.mutual ? "Friends" : "Following"}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            className={followActionBlueClass}
+            onClick={() => {
+              dispatch(
+                sendFollowRequest({
+                  fromUserId: authUser.id,
+                  toUserId: u.id,
+                }),
+              );
+              dispatch(setActiveModal("followRequestSent"));
+            }}
+          >
+            Follow
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const FOOTER_LINK_LABELS = [
   "About",
@@ -128,7 +281,9 @@ function MainLayout() {
   const authUser = useAppSelector((s) => s.auth.user);
   const usersById = useAppSelector((s) => s.users.usersById);
   const allUserIds = useAppSelector((s) => s.users.allUserIds);
+  console.log(usersById);
   const activeModal = useAppSelector((s) => s.ui.activeModal);
+  const social = useAppSelector((s) => s.social);
   const location = useLocation();
   const matches = useMatches();
   const isCreatePage = location.pathname === "/create";
@@ -137,16 +292,31 @@ function MainLayout() {
     Boolean((m.handle as { hideRightSidebar?: boolean })?.hideRightSidebar),
   );
 
-  // const db = JSON.parse(localStorage.getItem("ig_clone_users_v1") || "null");
-  // console.log("DB:", db);
-  // console.log("USERS:", db?.usersById ? Object.values(db.usersById) : []);
-  console.log("=== DEBUG AUTH USER ===", authUser);
-  console.log("=== DEBUG ALL USER IDS ===", allUserIds);
-  console.log("=== DEBUG USERS MAP ===", usersById);
-  console.log(
-    "=== DEBUG LOCAL STORAGE ===",
-    localStorage.getItem("ig_clone_users_v1"),
-  );
+  const incomingFollowRequests = useMemo(() => {
+    if (!authUser) return [];
+    return Object.values(social.requestsById).filter(
+      (r) => r.toUserId === authUser.id && r.status === "pending",
+    );
+  }, [authUser, social.requestsById]);
+
+  const outgoingFollowRequests = useMemo(() => {
+    if (!authUser) return [];
+    return Object.values(social.requestsById).filter(
+      (r) => r.fromUserId === authUser.id && r.status === "pending",
+    );
+  }, [authUser, social.requestsById]);
+
+  const followActivityBadgeCount =
+    incomingFollowRequests.length + outgoingFollowRequests.length;
+
+  const suggestedUsers = useMemo((): UserRecord[] => {
+    if (!authUser) return [];
+    return allUserIds
+      .filter((id) => id !== authUser.id)
+      .map((id) => usersById[id])
+      .filter((u): u is UserRecord => Boolean(u));
+  }, [authUser, allUserIds, usersById]);
+
   function handleLogout() {
     dispatch(logout());
     clearSession();
@@ -170,12 +340,18 @@ function MainLayout() {
             Instagram
           </span>
           <div className="flex items-center gap-3">
-            <button
-              aria-label="Notifications"
-              className="rounded-full p-1.5 transition-colors hover:bg-zinc-100 active:scale-95"
+            <NavLink
+              to="/notifications"
+              aria-label={
+                followActivityBadgeCount > 0
+                  ? `Notifications, ${followActivityBadgeCount} pending follow updates`
+                  : "Notifications"
+              }
+              className="relative rounded-full p-1.5 transition-colors hover:bg-zinc-100 active:scale-95"
             >
               <Heart size={23} strokeWidth={2} />
-            </button>
+              <NotificationBadge count={followActivityBadgeCount} />
+            </NavLink>
             <button
               aria-label="Messages"
               className="rounded-full p-1.5 transition-colors hover:bg-zinc-100 active:scale-95"
@@ -246,6 +422,44 @@ function MainLayout() {
                       />
                       <span className="hidden xl:inline">{item.label}</span>
                     </Button>
+                  );
+                }
+
+                if (item.to === "/notifications") {
+                  return (
+                    <NavLink
+                      key={item.label}
+                      to={item.to}
+                      aria-label={
+                        followActivityBadgeCount > 0
+                          ? `${item.label}, ${followActivityBadgeCount} pending follow updates`
+                          : item.label
+                      }
+                      className={({ isActive }) =>
+                        `group flex items-center gap-4 rounded-xl px-3 py-3 text-[15px] font-normal transition-all duration-100
+		  ${
+        isActive
+          ? "font-semibold text-zinc-900"
+          : "text-zinc-800 hover:bg-zinc-100"
+      }`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <span className="relative inline-flex shrink-0">
+                            <item.icon
+                              size={24}
+                              strokeWidth={isActive ? 2.5 : 2}
+                              className="transition-transform duration-100 group-hover:scale-110"
+                            />
+                            <NotificationBadge
+                              count={followActivityBadgeCount}
+                            />
+                          </span>
+                          <span className="hidden xl:inline">{item.label}</span>
+                        </>
+                      )}
+                    </NavLink>
                   );
                 }
 
@@ -375,37 +589,21 @@ function MainLayout() {
                   </Button>
                 </div>
                 <div className="space-y-3.5">
-                  {SUGGESTIONS.map((s) => (
-                    <div
-                      key={s.username}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="size-8">
-                          <AvatarImage src={s.avatar} alt={s.username} />
-                          <AvatarFallback className="text-xs">
-                            {s.username.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col items-start gap-0.5">
-                          <p className="text-[13px] font-semibold leading-snug">
-                            {s.username}
-                          </p>
-                          <p className="text-[12px] text-zinc-400 leading-snug">
-                            Suggested for you
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        aria-label={`Follow ${s.username}`}
-                        className="h-auto min-h-0 shrink-0 cursor-pointer rounded-md px-2.5 py-1 text-xs font-semibold text-[#0095f6] hover:bg-zinc-100 hover:text-[#0095f6] dark:hover:bg-zinc-800/80"
-                      >
-                        Follow
-                      </Button>
-                    </div>
-                  ))}
+                  {authUser && suggestedUsers.length === 0 ? (
+                    <p className="text-xs text-zinc-500">
+                      No other accounts yet. Sign up another user to see
+                      suggestions here.
+                    </p>
+                  ) : authUser ? (
+                    suggestedUsers.map((u) => (
+                      <SuggestedUserRow
+                        key={u.id}
+                        user={u}
+                        authUser={authUser}
+                        social={social}
+                      />
+                    ))
+                  ) : null}
                 </div>
               </div>
 
@@ -461,6 +659,96 @@ function MainLayout() {
             }}
             onCancel={closeModal}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={activeModal === "followRequests"}
+        onOpenChange={(open) => !open && closeModal()}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle style={{ color: "black" }}>
+              Follow requests
+            </DialogTitle>
+          </DialogHeader>
+          {incomingFollowRequests.length === 0 ? (
+            <p className="py-6 text-center text-sm text-zinc-500">
+              No pending requests.
+            </p>
+          ) : (
+            <ul className="max-h-[min(60vh,420px)] space-y-3 overflow-y-auto py-1">
+              {incomingFollowRequests.map((req) => {
+                const from = usersById[req.fromUserId];
+                const label = from?.username ?? "Unknown user";
+                const avatar = from?.avatarUrl;
+                return (
+                  <li
+                    key={req.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 px-3 py-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar className="size-10 shrink-0">
+                        <AvatarImage src={avatar} alt="" />
+                        <AvatarFallback className="text-xs">
+                          {label.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-zinc-900">
+                          {label}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          wants to follow you
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 rounded-lg bg-[#0095f6] px-3 text-xs font-semibold text-white hover:bg-[#1877f2]"
+                        onClick={() =>
+                          dispatch(acceptFollowRequest({ requestId: req.id }))
+                        }
+                      >
+                        Confirm
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 rounded-lg px-3 text-xs font-semibold"
+                        onClick={() =>
+                          dispatch(rejectFollowRequest({ requestId: req.id }))
+                        }
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={activeModal === "followRequestSent"}
+        onOpenChange={(open) => !open && closeModal()}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle style={{ color: "black" }}>Request sent</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-zinc-600">
+            When they approve your request, you&apos;ll start seeing their posts
+            in your feed.
+          </p>
+          <Button type="button" className="mt-4 w-full" onClick={closeModal}>
+            OK
+          </Button>
         </DialogContent>
       </Dialog>
       {/* ─── Mobile bottom nav ─── */}

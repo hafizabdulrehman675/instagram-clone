@@ -52,15 +52,31 @@ const p1Comments: PostComment[] = [
 const initialPosts: FeedPost[] = [
   {
     id: "p1",
-    username: "john_doe",
+    authorId: "u2",
+    username: "second_user",
     location: "Karachi, PK",
-    avatarUrl: "https://i.pravatar.cc/100?img=5",
+    avatarUrl: "https://i.pravatar.cc/100?u=second",
     imageUrl: "https://picsum.photos/700?random=1",
     likesCount: 1284,
     caption: "Golden hour never misses.",
     commentsCount: p1Comments.length,
     comments: p1Comments,
     postedAtLabel: "2 HOURS AGO",
+    isLiked: false,
+    isSaved: false,
+  },
+  {
+    id: "p2",
+    authorId: "u1",
+    username: "demo_user",
+    location: "Studio",
+    avatarUrl: "https://i.pravatar.cc/100?u=demo",
+    imageUrl: "https://picsum.photos/700?random=2",
+    likesCount: 42,
+    caption: "Shipping features on a Sunday.",
+    commentsCount: 0,
+    comments: [],
+    postedAtLabel: "1 DAY AGO",
     isLiked: false,
     isSaved: false,
   },
@@ -126,15 +142,22 @@ const postsSlice = createSlice({
     syncPostAuthorUsername(
       state,
       action: PayloadAction<{
-        fromUsername: string;
+        userId?: string;
+        fromUsername?: string;
         toUsername: string;
         avatarUrl?: string;
       }>,
     ) {
-      const { fromUsername, toUsername, avatarUrl } = action.payload;
+      const { userId, fromUsername, toUsername, avatarUrl } = action.payload;
       for (const id of state.feedPostIds) {
         const p = state.postsById[id];
-        if (!p || p.username !== fromUsername) continue;
+        if (!p) continue;
+        const byUserId = userId !== undefined && p.authorId === userId;
+        const byUsername =
+          !userId &&
+          fromUsername !== undefined &&
+          p.username === fromUsername;
+        if (!byUserId && !byUsername) continue;
         p.username = toUsername;
         if (avatarUrl !== undefined) p.avatarUrl = avatarUrl;
       }

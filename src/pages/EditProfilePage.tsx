@@ -113,6 +113,7 @@ function EditProfilePage() {
       if (authUser.username !== u) {
         dispatch(
           syncPostAuthorUsername({
+            userId: authUser.id,
             fromUsername: authUser.username,
             toUsername: u,
             avatarUrl: authUser.avatarUrl,

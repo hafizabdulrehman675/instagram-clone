@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import {
   Grid3X3,
   Bookmark,
@@ -21,6 +21,11 @@ import {
 import type { FeedPost } from "@/features/posts/types";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
 import { setActiveModal } from "@/features/ui/redux/uiSlice";
+import {
+  sendFollowRequest,
+  cancelFollowRequest,
+  unfollow,
+} from "@/features/social/redux/socialSlice";
 
 /* ─── Highlight bubble ──────────────────────────────────────────── */
 const HIGHLIGHTS = [
@@ -80,7 +85,6 @@ function PostDialog({
     <Dialog open={!!post} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-xl border-0 shadow-2xl">
         <div className="flex flex-col sm:flex-row">
-          {/* Image */}
           <div className="aspect-square w-full sm:w-1/2 bg-black shrink-0">
             <img
               src={post.imageUrl}
@@ -88,7 +92,6 @@ function PostDialog({
               className="h-full w-full object-cover"
             />
           </div>
-          {/* Info */}
           <div className="flex flex-1 flex-col p-5">
             <DialogHeader className="mb-3">
               <DialogTitle className="text-[14px] font-semibold">
@@ -148,17 +151,46 @@ function ProfileEmptyState({
   );
 }
 
+function countFollowers(
+  followingByUserId: Record<string, string[]>,
+  userId: string,
+): number {
+  let n = 0;
+  for (const ids of Object.values(followingByUserId)) {
+    if (ids.includes(userId)) n += 1;
+  }
+  return n;
+}
+
 /* ─── Main component ─────────────────────────────────────────────── */
 function ProfilePage() {
+  const { username: routeUsername } = useParams<{ username?: string }>();
   const authUser = useAppSelector((s) => s.auth.user);
+  const usersById = useAppSelector((s) => s.users.usersById);
+  const social = useAppSelector((s) => s.social);
   const dispatch = useAppDispatch();
 
+  const profileUser = useMemo(() => {
+    if (!routeUsername) return authUser ?? null;
+    if (authUser && routeUsername === authUser.username) return authUser;
+    const match = Object.values(usersById).find(
+      (u) => u.username === routeUsername,
+    );
+    return match ?? null;
+  }, [routeUsername, authUser, usersById]);
+
+  const isOwnProfile = Boolean(
+    authUser && profileUser && profileUser.id === authUser.id,
+  );
+
   const userPosts = useAppSelector((s) => {
-    if (!s.auth.user) return [] as FeedPost[];
-    const username = s.auth.user.username;
+    if (!profileUser) return [] as FeedPost[];
     return s.posts.feedPostIds
       .map((id) => s.posts.postsById[id])
-      .filter((p): p is FeedPost => Boolean(p) && p.username === username);
+      .filter(
+        (p): p is FeedPost =>
+          Boolean(p) && p.authorId === profileUser.id,
+      );
   });
 
   const savedPosts = useAppSelector((s) =>
@@ -170,16 +202,46 @@ function ProfilePage() {
   const [tab, setTab] = useState<ProfileTab>("posts");
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
 
-  const stats = useMemo(
-    () => ({
-      posts: userPosts.length,
-      followers: 1_284,
-      following: 320,
-    }),
-    [userPosts.length],
-  );
+  useEffect(() => {
+    setTab("posts");
+  }, [routeUsername, profileUser?.id]);
 
-  if (!authUser) {
+  useEffect(() => {
+    if (!isOwnProfile && tab === "saved") setTab("posts");
+  }, [isOwnProfile, tab]);
+
+  const followStatus = useMemo(() => {
+    if (!authUser || !profileUser || isOwnProfile) return "self" as const;
+    const following = social.followingByUserId[authUser.id] ?? [];
+    if (following.includes(profileUser.id)) return "following" as const;
+    const id = `fr_${authUser.id}_${profileUser.id}`;
+    const req = social.requestsById[id];
+    if (req?.status === "pending") return "requested" as const;
+    return "none" as const;
+  }, [authUser, profileUser, isOwnProfile, social]);
+
+  const stats = useMemo(() => {
+    if (!profileUser) {
+      return { posts: 0, followers: 0, following: 0 };
+    }
+    return {
+      posts: userPosts.length,
+      followers: countFollowers(social.followingByUserId, profileUser.id),
+      following: social.followingByUserId[profileUser.id]?.length ?? 0,
+    };
+  }, [profileUser, userPosts.length, social.followingByUserId]);
+
+  const tabDefs = useMemo(() => {
+    const all = [
+      { key: "posts" as const, icon: Grid3X3, label: "POSTS" },
+      { key: "reels" as const, icon: Play, label: "REELS" },
+      { key: "saved" as const, icon: Bookmark, label: "SAVED" },
+      { key: "tagged" as const, icon: Tag, label: "TAGGED" },
+    ];
+    return isOwnProfile ? all : all.filter((t) => t.key === "posts");
+  }, [isOwnProfile]);
+
+  if (!authUser && !routeUsername) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <p className="text-sm text-zinc-500">
@@ -189,21 +251,64 @@ function ProfilePage() {
     );
   }
 
-  /* ── Tab grid content ── */
-  const gridPosts = tab === "saved" ? savedPosts : userPosts;
+  if (!profileUser) {
+    return (
+      <div className="mx-auto flex min-h-[50vh] max-w-[935px] flex-col items-center justify-center px-4 text-center">
+        <p className="text-lg font-semibold text-zinc-900">User not found</p>
+        <p className="mt-2 text-sm text-zinc-500">
+          No account matches{" "}
+          <span className="font-medium">@{routeUsername ?? ""}</span>.
+        </p>
+        <Button type="button" variant="link" className="mt-4" asChild>
+          <Link to="/">Back to home</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const gridPosts = tab === "saved" && isOwnProfile ? savedPosts : userPosts;
 
   function openCreatePostModal() {
     dispatch(setActiveModal("createPost"));
   }
+
+  function handlePrimaryFollowAction() {
+    if (!authUser || !profileUser || isOwnProfile) return;
+    if (followStatus === "none") {
+      dispatch(
+        sendFollowRequest({
+          fromUserId: authUser.id,
+          toUserId: profileUser.id,
+        }),
+      );
+      dispatch(setActiveModal("followRequestSent"));
+    } else if (followStatus === "requested") {
+      dispatch(
+        cancelFollowRequest({
+          fromUserId: authUser.id,
+          toUserId: profileUser.id,
+        }),
+      );
+    } else {
+      dispatch(
+        unfollow({ followerId: authUser.id, followingId: profileUser.id }),
+      );
+    }
+  }
+
+  const followButtonLabel =
+    followStatus === "following"
+      ? "Following"
+      : followStatus === "requested"
+        ? "Requested"
+        : "Follow";
 
   return (
     <>
       <style>{`@import url('https://fonts.cdnfonts.com/css/billabong');`}</style>
 
       <div className="mx-auto w-full max-w-[935px] px-4 md:px-8">
-        {/* ══ Header ═══════════════════════════════════════════════ */}
         <div className="flex flex-col gap-6 pb-6 pt-8 sm:flex-row sm:items-start sm:gap-10 md:gap-16">
-          {/* Avatar */}
           <div className="flex justify-center sm:block sm:shrink-0">
             <div
               className="rounded-full p-[3px]"
@@ -212,60 +317,85 @@ function ProfilePage() {
               <div className="rounded-full bg-white p-[3px]">
                 <Avatar className="size-[86px] sm:size-[150px]">
                   <AvatarImage
-                    src={authUser.avatarUrl}
-                    alt={authUser.username}
+                    src={profileUser.avatarUrl}
+                    alt={profileUser.username}
                   />
                   <AvatarFallback className="text-xl font-semibold">
-                    {authUser.username.slice(0, 2).toUpperCase()}
+                    {profileUser.username.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               </div>
             </div>
           </div>
 
-          {/* Info */}
           <div className="flex flex-1 flex-col gap-4">
-            {/* Username row */}
             <div className="flex flex-wrap items-center gap-3">
               <h2
                 className="text-[22px] font-normal leading-none"
                 style={{ color: "black" }}
               >
-                {authUser.username}
+                {profileUser.username}
               </h2>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={profileBtnSecondary}
-                asChild
-              >
-                <Link to="/profile/edit">Edit profile</Link>
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={profileBtnSecondary}
-                onClick={() => dispatch(setActiveModal("createPost"))}
-              >
-                <Plus size={15} className="mr-1" />
-                Create
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Settings"
-                className={profileBtnGhostIcon}
-              >
-                <Settings size={22} strokeWidth={1.75} />
-              </Button>
+
+              {isOwnProfile ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className={profileBtnSecondary}
+                    asChild
+                  >
+                    <Link to="/profile/edit">Edit profile</Link>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className={profileBtnSecondary}
+                    onClick={() => dispatch(setActiveModal("createPost"))}
+                  >
+                    <Plus size={15} className="mr-1" />
+                    Create
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Settings"
+                    className={profileBtnGhostIcon}
+                  >
+                    <Settings size={22} strokeWidth={1.75} />
+                  </Button>
+                </>
+              ) : authUser ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className={profileBtnSecondary}
+                    onClick={handlePrimaryFollowAction}
+                  >
+                    {followButtonLabel}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className={profileBtnSecondary}
+                    asChild
+                  >
+                    <Link to="/messages">Message</Link>
+                  </Button>
+                </>
+              ) : null}
             </div>
 
-            {/* Stats (desktop) */}
             <div className="hidden sm:flex items-center gap-10">
               {[
                 { value: stats.posts, label: "posts" },
-                { value: stats.followers.toLocaleString(), label: "followers" },
+                {
+                  value: stats.followers.toLocaleString(),
+                  label: "followers",
+                },
                 { value: stats.following, label: "following" },
               ].map(({ value, label }) => (
                 <Button
@@ -280,26 +410,26 @@ function ProfilePage() {
               ))}
             </div>
 
-            {/* Name + bio */}
             <div className="flex flex-col" style={{ alignItems: "start" }}>
               <p className="text-[14px] font-semibold leading-snug pb-1">
-                {authUser.fullName}
+                {profileUser.fullName}
               </p>
               <p className="mt-0.5 text-[14px] leading-snug text-zinc-700">
                 ✦ Building cool things with React &amp; TypeScript
               </p>
-              <Button
-                type="button"
-                variant="ghost"
-                className={`${profileBtnGhostRow} mt-0.5 flex items-center gap-0.5 text-[14px] font-semibold text-zinc-900`}
-              >
-                more <ChevronDown size={14} />
-              </Button>
+              {isOwnProfile ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={`${profileBtnGhostRow} mt-0.5 flex items-center gap-0.5 text-[14px] font-semibold text-zinc-900`}
+                >
+                  more <ChevronDown size={14} />
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
 
-        {/* ── Mobile stats ── */}
         <div className="flex items-center justify-around border-y border-zinc-200 py-3 sm:hidden">
           {[
             { value: stats.posts, label: "Posts" },
@@ -315,48 +445,46 @@ function ProfilePage() {
           ))}
         </div>
 
-        {/* ── Story highlights ── */}
-        <div
-          className="flex gap-5 overflow-x-auto py-5"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {/* Add new */}
-          <Button type="button" variant="ghost" className={profileBtnHighlight}>
-            <div className="flex size-[77px] items-center justify-center rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 text-2xl">
-              <Plus size={24} strokeWidth={1.5} className="text-zinc-500" />
-            </div>
-            <span className="text-[12px] text-zinc-600">New</span>
-          </Button>
-
-          {HIGHLIGHTS.map((h) => (
+        {isOwnProfile ? (
+          <div
+            className="flex gap-5 overflow-x-auto py-5"
+            style={{ scrollbarWidth: "none" }}
+          >
             <Button
-              key={h.id}
               type="button"
               variant="ghost"
               className={profileBtnHighlight}
             >
-              <div className="flex size-[77px] items-center justify-center rounded-full bg-zinc-100 text-[28px] ring-1 ring-zinc-200">
-                {h.emoji}
+              <div className="flex size-[77px] items-center justify-center rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 text-2xl">
+                <Plus size={24} strokeWidth={1.5} className="text-zinc-500" />
               </div>
-              <span className="text-[12px] text-zinc-700">{h.label}</span>
+              <span className="text-[12px] text-zinc-600">New</span>
             </Button>
-          ))}
-        </div>
 
-        {/* ── Tabs ── */}
+            {HIGHLIGHTS.map((h) => (
+              <Button
+                key={h.id}
+                type="button"
+                variant="ghost"
+                className={profileBtnHighlight}
+              >
+                <div className="flex size-[77px] items-center justify-center rounded-full bg-zinc-100 text-[28px] ring-1 ring-zinc-200">
+                  {h.emoji}
+                </div>
+                <span className="text-[12px] text-zinc-700">{h.label}</span>
+              </Button>
+            ))}
+          </div>
+        ) : null}
+
         <div className="border-t border-zinc-200">
           <div className="flex justify-center gap-0">
-            {[
-              { key: "posts", icon: Grid3X3, label: "POSTS" },
-              { key: "reels", icon: Play, label: "REELS" },
-              { key: "saved", icon: Bookmark, label: "SAVED" },
-              { key: "tagged", icon: Tag, label: "TAGGED" },
-            ].map(({ key, icon: Icon, label }) => (
+            {tabDefs.map(({ key, icon: Icon, label }) => (
               <Button
                 key={key}
                 type="button"
                 variant="ghost"
-                onClick={() => setTab(key as typeof tab)}
+                onClick={() => setTab(key)}
                 className={`${profileBtnGhostTab} -mt-px flex items-center gap-1.5 border-t ${
                   tab === key
                     ? "border-zinc-900 text-zinc-900 hover:text-zinc-900"
@@ -369,7 +497,6 @@ function ProfilePage() {
             ))}
           </div>
 
-          {/* ── Grid ── */}
           <div className="mt-0.5">
             {tab === "tagged" ? (
               <ProfileEmptyState
@@ -415,11 +542,9 @@ function ProfilePage() {
           </div>
         </div>
 
-        {/* bottom padding for mobile nav */}
         <div className="h-16 md:h-6" />
       </div>
 
-      {/* ── Post detail dialog ── */}
       <PostDialog post={selectedPost} onClose={() => setSelectedPost(null)} />
     </>
   );

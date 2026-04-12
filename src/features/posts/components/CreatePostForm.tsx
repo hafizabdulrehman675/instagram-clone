@@ -37,6 +37,7 @@ function CreatePostForm({ onSuccess, onCancel }: CreatePostFormProps) {
 
     const newPost: FeedPost = {
       id: `p_${Date.now()}`,
+      authorId: authUser.id,
       username: authUser.username,
       avatarUrl: authUser.avatarUrl,
       location: location.trim(),

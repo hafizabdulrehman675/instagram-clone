@@ -2,7 +2,12 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 export type ThemeMode = "light" | "dark";
 
-export type ActiveModal = "none" | "createPost" | "notifications";
+export type ActiveModal =
+  | "none"
+  | "createPost"
+  | "notifications"
+  | "followRequests"
+  | "followRequestSent";
 
 type UIState = {
   isMobileNavOpen: boolean;

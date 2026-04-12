@@ -15,6 +15,8 @@ export type PostComment = {
 
 export type FeedPost = {
   id: string;
+  /** Author user id (matches `users.usersById`) */
+  authorId: string;
   username: string;
   location: string;
   avatarUrl: string;

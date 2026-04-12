@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Bookmark,
   Heart,
@@ -239,9 +240,12 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
           </div>
 
           <div className="flex flex-col justify-start">
-            <p className="text-[17px] font-semibold leading-tight cursor-pointer pb-[6px]">
+            <Link
+              to={`/profile/${encodeURIComponent(post.username)}`}
+              className="text-[17px] font-semibold leading-tight cursor-pointer pb-[6px] hover:underline"
+            >
               {post.username}
-            </p>
+            </Link>
             {post.location && (
               <p
                 className="text-[12px] leading-tight text-zinc-500 al"
@@ -455,11 +459,26 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
 function FeedPage() {
   const dispatch = useAppDispatch();
 
-  const posts = useAppSelector((state) =>
+  const allPosts = useAppSelector((state) =>
     state.posts.feedPostIds
       .map((id) => state.posts.postsById[id])
       .filter((post): post is FeedPost => Boolean(post)),
   );
+
+  const authUser = useAppSelector((s) => s.auth.user);
+  const followingByUserId = useAppSelector(
+    (s) => s.social.followingByUserId,
+  );
+
+  const posts = useMemo(() => {
+    if (!authUser) return allPosts;
+    const following = followingByUserId[authUser.id] ?? [];
+    if (following.length === 0) return allPosts;
+    return allPosts.filter(
+      (p) =>
+        p.authorId === authUser.id || following.includes(p.authorId),
+    );
+  }, [allPosts, authUser, followingByUserId]);
 
   function handleToggleLike(postId: string) {
     dispatch(toggleLike({ postId }));

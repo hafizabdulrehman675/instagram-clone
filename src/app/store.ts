@@ -3,6 +3,7 @@ import uiReducer from "@/features/ui/redux/uiSlice";
 import authReducer from "@/features/auth/redux/authSlice";
 import usersReducer from "@/features/users/redux/usersSlice";
 import postsReducer from "@/features/posts/redux/postsSlice";
+import socialReducer from "@/features/social/redux/socialSlice";
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     auth: authReducer,
     users: usersReducer,
     posts: postsReducer,
+    social: socialReducer,
   },
 });
 

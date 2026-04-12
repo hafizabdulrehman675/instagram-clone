@@ -1,4 +1,9 @@
+import { useMemo } from "react";
 import { Heart, MessageCircle, UserPlus } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { setActiveModal } from "@/features/ui/redux/uiSlice";
 
 type NotificationItem = {
   id: string;
@@ -40,11 +45,49 @@ function NotificationIcon({ type }: { type: NotificationItem["type"] }) {
 }
 
 function NotificationsPage() {
+  const dispatch = useAppDispatch();
+  const authUser = useAppSelector((s) => s.auth.user);
+  const social = useAppSelector((s) => s.social);
+
+  const followActivityCount = useMemo(() => {
+    if (!authUser) return 0;
+    const incoming = Object.values(social.requestsById).filter(
+      (r) => r.toUserId === authUser.id && r.status === "pending",
+    ).length;
+    const outgoing = Object.values(social.requestsById).filter(
+      (r) => r.fromUserId === authUser.id && r.status === "pending",
+    ).length;
+    return incoming + outgoing;
+  }, [authUser, social.requestsById]);
+
   return (
     <div className="mx-auto w-full max-w-[630px] space-y-4 px-1 py-4">
       <h1 className="text-xl font-semibold" style={{ color: "black" }}>
         Notifications
       </h1>
+
+      <div className="flex items-center justify-between rounded-md border border-zinc-200 bg-white px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-zinc-900">Follow requests</p>
+          <p className="text-xs text-zinc-500">
+            Approve who can follow you back.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="relative shrink-0 rounded-lg text-xs font-semibold"
+          onClick={() => dispatch(setActiveModal("followRequests"))}
+        >
+          Open
+          {followActivityCount > 0 ? (
+            <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+              {followActivityCount > 9 ? "9+" : followActivityCount}
+            </span>
+          ) : null}
+        </Button>
+      </div>
 
       <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
         {MOCK_NOTIFICATIONS.map((item, index) => (
