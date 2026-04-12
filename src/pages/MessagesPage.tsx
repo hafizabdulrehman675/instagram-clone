@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import {
   Search,
-  Edit,
   Phone,
   Video,
   Info,
@@ -9,13 +8,10 @@ import {
   Image,
   Heart,
   Smile,
-  MoreHorizontal,
   ChevronLeft,
   Mic,
-  ChevronDown,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Input } from "@/components/ui/input";
 import { useAppSelector } from "@/app/hooks";
 
 /* ─── Types ─────────────────────────────────────────────────────── */
@@ -497,18 +493,16 @@ function MessagesPage() {
       `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-[17px] font-bold text-zinc-900">
-              {authUser?.username ?? "Messages"}
-            </h1>
-            <button className="rounded-full p-1 text-zinc-500 hover:bg-zinc-100 transition">
-              <ChevronDown size={18} />
-            </button>
+            <h2
+              className="font-bold text-zinc-900"
+              style={{ color: "black", fontSize: "50px" }}
+            >
+              {/* {authUser?.username ?? "Messages"} */}
+              Messages
+            </h2>
           </div>
-          <button className="rounded-full p-1.5 text-zinc-900 hover:bg-zinc-100 transition">
-            <Edit size={22} strokeWidth={1.75} />
-          </button>
         </div>
 
         {/* Search */}

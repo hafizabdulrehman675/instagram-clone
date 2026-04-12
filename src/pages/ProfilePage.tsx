@@ -110,6 +110,44 @@ function PostDialog({
   );
 }
 
+type ProfileTab = "posts" | "reels" | "saved" | "tagged";
+
+function ProfileEmptyState({
+  icon: Icon,
+  title,
+  sub,
+  activeTab,
+  onCreatePost,
+}: {
+  icon: React.ElementType;
+  title: string;
+  sub: string;
+  activeTab: ProfileTab;
+  onCreatePost: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="mb-5 flex size-20 items-center justify-center rounded-full border-2 border-zinc-300">
+        <Icon size={36} strokeWidth={1.25} className="text-zinc-400" />
+      </div>
+      <p className="text-[22px] font-bold text-zinc-900">{title}</p>
+      <p className="mt-2 max-w-[260px] text-[14px] text-zinc-500 leading-snug">
+        {sub}
+      </p>
+      {activeTab === "posts" ? (
+        <Button
+          type="button"
+          variant="link"
+          className={profileBtnLinkBlue}
+          onClick={onCreatePost}
+        >
+          Share your first photo
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 /* ─── Main component ─────────────────────────────────────────────── */
 function ProfilePage() {
   const authUser = useAppSelector((s) => s.auth.user);
@@ -129,9 +167,7 @@ function ProfilePage() {
       .filter((p): p is FeedPost => Boolean(p) && p.isSaved),
   );
 
-  const [tab, setTab] = useState<"posts" | "reels" | "saved" | "tagged">(
-    "posts",
-  );
+  const [tab, setTab] = useState<ProfileTab>("posts");
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
 
   const stats = useMemo(
@@ -156,35 +192,9 @@ function ProfilePage() {
   /* ── Tab grid content ── */
   const gridPosts = tab === "saved" ? savedPosts : userPosts;
 
-  const EmptyState = ({
-    icon: Icon,
-    title,
-    sub,
-  }: {
-    icon: React.ElementType;
-    title: string;
-    sub: string;
-  }) => (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="mb-5 flex size-20 items-center justify-center rounded-full border-2 border-zinc-300">
-        <Icon size={36} strokeWidth={1.25} className="text-zinc-400" />
-      </div>
-      <p className="text-[22px] font-bold text-zinc-900">{title}</p>
-      <p className="mt-2 max-w-[260px] text-[14px] text-zinc-500 leading-snug">
-        {sub}
-      </p>
-      {tab === "posts" && (
-        <Button
-          type="button"
-          variant="link"
-          className={profileBtnLinkBlue}
-          onClick={() => dispatch(setActiveModal("createPost"))}
-        >
-          Share your first photo
-        </Button>
-      )}
-    </div>
-  );
+  function openCreatePostModal() {
+    dispatch(setActiveModal("createPost"));
+  }
 
   return (
     <>
@@ -362,19 +372,23 @@ function ProfilePage() {
           {/* ── Grid ── */}
           <div className="mt-0.5">
             {tab === "tagged" ? (
-              <EmptyState
+              <ProfileEmptyState
                 icon={Tag}
                 title="Photos of you"
                 sub="When people tag you in photos, they'll appear here."
+                activeTab={tab}
+                onCreatePost={openCreatePostModal}
               />
             ) : tab === "reels" ? (
-              <EmptyState
+              <ProfileEmptyState
                 icon={Play}
                 title="No reels yet"
                 sub="Reels you create will appear here."
+                activeTab={tab}
+                onCreatePost={openCreatePostModal}
               />
             ) : gridPosts.length === 0 ? (
-              <EmptyState
+              <ProfileEmptyState
                 icon={Grid3X3}
                 title={
                   tab === "saved" ? "Save photos and videos" : "Share photos"
@@ -384,6 +398,8 @@ function ProfilePage() {
                     ? "Save photos and videos that you want to see again."
                     : "When you share photos, they'll appear on your profile."
                 }
+                activeTab={tab}
+                onCreatePost={openCreatePostModal}
               />
             ) : (
               <div className="grid grid-cols-3 gap-[3px]">

@@ -42,7 +42,9 @@ function NotificationIcon({ type }: { type: NotificationItem["type"] }) {
 function NotificationsPage() {
   return (
     <div className="mx-auto w-full max-w-[630px] space-y-4 px-1 py-4">
-      <h1 className="text-xl font-semibold">Notifications</h1>
+      <h1 className="text-xl font-semibold" style={{ color: "black" }}>
+        Notifications
+      </h1>
 
       <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
         {MOCK_NOTIFICATIONS.map((item, index) => (

@@ -7,12 +7,8 @@ import {
   Search,
   User,
   Film,
-  Bookmark,
-  Settings,
-  MoreHorizontal,
 } from "lucide-react";
 import {
-  Navigate,
   NavLink,
   Outlet,
   useLocation,
@@ -23,13 +19,7 @@ import { useAppSelector, useAppDispatch } from "@/app/hooks";
 import { logout } from "@/features/auth/redux/authSlice";
 import { clearSession } from "@/lib/session";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import {
   Dialog,
   DialogContent,
@@ -76,6 +66,23 @@ const SUGGESTIONS = [
     avatar: "https://i.pravatar.cc/100?img=55",
   },
 ];
+
+const FOOTER_LINK_LABELS = [
+  "About",
+  "Help",
+  "Press",
+  "API",
+  "Jobs",
+  "Privacy",
+  "Terms",
+  "Locations",
+  "Language",
+  "Meta Verified",
+] as const;
+
+const footerLinkButtonClass =
+  "h-auto min-h-0 cursor-pointer rounded px-1 py-0.5 text-[11px] font-normal leading-relaxed text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-300";
+
 function SidebarNavItem({
   label,
   icon: Icon,
@@ -152,7 +159,7 @@ function MainLayout() {
     dispatch(setActiveModal("none"));
   }
   return (
-    <div className="min-h-screen bg-white text-zinc-900">
+    <div className="bg-white text-zinc-900">
       {/* ─── Mobile top bar ─── */}
       <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white px-4 py-2.5 md:hidden">
         <div className="mx-auto flex max-w-[500px] items-center justify-between">
@@ -294,39 +301,6 @@ function MainLayout() {
                 }
               </NavLink>
             </nav>
-
-            {/* More dropdown */}
-            <div className="mt-2 border-t border-zinc-100 pt-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="group flex w-full items-center gap-4 rounded-xl px-3 py-3 text-[15px] text-zinc-800 transition hover:bg-zinc-100 active:scale-[0.98]">
-                    <MoreHorizontal
-                      size={24}
-                      strokeWidth={2}
-                      className="shrink-0 transition-transform duration-100 group-hover:scale-110"
-                    />
-                    <span className="hidden xl:inline">More</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" side="top" className="w-60">
-                  <DropdownMenuItem className="py-2.5">
-                    <Settings size={16} className="mr-3" />
-                    Settings
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="py-2.5">
-                    <Bookmark size={16} className="mr-3" />
-                    Saved
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="py-2.5 text-red-600 focus:text-red-600 focus:bg-red-50"
-                    onClick={handleLogout}
-                  >
-                    Log out {authUser ? `@${authUser.username}` : ""}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
           </div>
         </aside>
 
@@ -350,7 +324,7 @@ function MainLayout() {
         {/* ─── Right sidebar ─── */}
         {!hideRightSidebar && (
           <aside className="hidden xl:col-span-3 xl:flex flex-col px-7 py-8">
-            <div className="sticky top-8 space-y-6">
+            <div className="sticky top-8 space-y-12">
               {/* Logged-in user widget */}
               {authUser && (
                 <div className="flex items-center justify-between">
@@ -364,7 +338,7 @@ function MainLayout() {
                         {authUser.username.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
+                    <div className="flex flex-col justify-start items-start">
                       <p className="text-sm font-semibold leading-snug">
                         {authUser.username}
                       </p>
@@ -373,24 +347,32 @@ function MainLayout() {
                       </p>
                     </div>
                   </div>
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
                     onClick={handleLogout}
-                    className="text-xs font-semibold text-blue-500 hover:text-blue-700 transition active:scale-95"
+                    aria-label="Log out or switch account"
+                    className="h-auto min-h-0 cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-[#0095f6] hover:bg-zinc-100 hover:text-[#0095f6] dark:hover:bg-zinc-800/80"
                   >
-                    Switch
-                  </button>
+                    Log Out
+                  </Button>
                 </div>
               )}
 
               {/* Suggestions */}
               <div>
-                <div className="mb-3.5 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-zinc-500">
-                    Suggested for you
+                <div className="mb-5 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Suggested For You
                   </p>
-                  <button className="text-xs font-semibold text-zinc-900 hover:text-zinc-500 transition">
-                    See All
-                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    aria-label="See all suggested accounts"
+                    className="h-auto min-h-0 cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-zinc-900 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-100"
+                  >
+                    See all
+                  </Button>
                 </div>
                 <div className="space-y-3.5">
                   {SUGGESTIONS.map((s) => (
@@ -405,7 +387,7 @@ function MainLayout() {
                             {s.username.slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
-                        <div>
+                        <div className="flex flex-col items-start gap-0.5">
                           <p className="text-[13px] font-semibold leading-snug">
                             {s.username}
                           </p>
@@ -414,22 +396,48 @@ function MainLayout() {
                           </p>
                         </div>
                       </div>
-                      <button className="text-xs font-semibold text-blue-500 hover:text-blue-700 transition active:scale-95">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        aria-label={`Follow ${s.username}`}
+                        className="h-auto min-h-0 shrink-0 cursor-pointer rounded-md px-2.5 py-1 text-xs font-semibold text-[#0095f6] hover:bg-zinc-100 hover:text-[#0095f6] dark:hover:bg-zinc-800/80"
+                      >
                         Follow
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Footer */}
-              <div>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">
-                  About · Help · Press · API · Jobs · Privacy · Terms ·
-                  Locations · Language · Meta Verified
-                </p>
-                <p className="mt-2 text-[11px] text-zinc-400">
-                  © 2025 Instagram from Meta
+              <div className="text-center">
+                <nav
+                  aria-label="Site links"
+                  className="flex flex-wrap items-center justify-center gap-x-0.5 gap-y-1 leading-relaxed"
+                >
+                  {FOOTER_LINK_LABELS.map((label, index) => (
+                    <span key={label} className="inline-flex items-center">
+                      {index > 0 ? (
+                        <span
+                          className="mx-0.5 text-[11px] text-zinc-400 select-none"
+                          aria-hidden
+                        >
+                          ·
+                        </span>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        aria-label={label}
+                        className={footerLinkButtonClass}
+                      >
+                        {label}
+                      </Button>
+                    </span>
+                  ))}
+                </nav>
+                <p className="mt-2 text-center text-[11px] text-zinc-400">
+                  © 2026 Instagram from Meta
                 </p>
               </div>
             </div>
@@ -442,7 +450,9 @@ function MainLayout() {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Create new post</DialogTitle>
+            <DialogTitle style={{ color: "black" }}>
+              Create New Post
+            </DialogTitle>
           </DialogHeader>
           <CreatePostForm
             onSuccess={() => {
