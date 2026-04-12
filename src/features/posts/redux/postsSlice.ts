@@ -123,8 +123,30 @@ const postsSlice = createSlice({
       });
       post.commentsCount = post.comments.length;
     },
+    syncPostAuthorUsername(
+      state,
+      action: PayloadAction<{
+        fromUsername: string;
+        toUsername: string;
+        avatarUrl?: string;
+      }>,
+    ) {
+      const { fromUsername, toUsername, avatarUrl } = action.payload;
+      for (const id of state.feedPostIds) {
+        const p = state.postsById[id];
+        if (!p || p.username !== fromUsername) continue;
+        p.username = toUsername;
+        if (avatarUrl !== undefined) p.avatarUrl = avatarUrl;
+      }
+    },
   },
 });
 
-export const { addPost, toggleLike, toggleSave, addComment } = postsSlice.actions;
+export const {
+  addPost,
+  toggleLike,
+  toggleSave,
+  addComment,
+  syncPostAuthorUsername,
+} = postsSlice.actions;
 export default postsSlice.reducer;

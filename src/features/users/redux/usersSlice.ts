@@ -71,8 +71,30 @@ const usersSlice = createSlice({
       state.allUserIds = seeded.allUserIds;
       persistUsers(state);
     },
+
+    updateUserProfile(
+      state,
+      action: PayloadAction<{
+        userId: string;
+        fullName: string;
+        username: string;
+        email: string;
+        newPassword?: string;
+      }>,
+    ) {
+      const u = state.usersById[action.payload.userId];
+      if (!u) return;
+      u.fullName = action.payload.fullName.trim();
+      u.username = action.payload.username.trim();
+      u.email = action.payload.email.trim();
+      if (action.payload.newPassword) {
+        u.password = action.payload.newPassword;
+      }
+      persistUsers(state);
+    },
   },
 });
 
-export const { registerUser, resetDemoUsers } = usersSlice.actions;
+export const { registerUser, resetDemoUsers, updateUserProfile } =
+  usersSlice.actions;
 export default usersSlice.reducer;

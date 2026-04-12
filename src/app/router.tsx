@@ -8,6 +8,7 @@ import SignupPage from "@/pages/SignupPage";
 import ProtectedRoute from "@/components/common/ProtectedRoute";
 import CreatePostPage from "@/pages/CreatePostPage";
 import ProfilePage from "@/pages/ProfilePage";
+import EditProfilePage from "@/pages/EditProfilePage";
 import ExplorePage from "@/pages/ExplorePage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import MessagesPage from "@/pages/MessagesPage";
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
             element: <FeedPage />,
           },
           { path: "profile", element: <ProfilePage /> },
+          { path: "profile/edit", element: <EditProfilePage /> },
           { path: "create", element: <CreatePostPage /> },
           { path: "explore", element: <ExplorePage /> },
           { path: "notifications", element: <NotificationsPage /> },

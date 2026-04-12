@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Grid3X3,
   Bookmark,
@@ -33,42 +34,36 @@ const HIGHLIGHTS = [
 const IG_GRADIENT =
   "linear-gradient(45deg,#f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)";
 
+/* ShadCN Button: no hover/active visual change (static chrome) */
+const profileBtnSecondary =
+  "h-8 rounded-lg border-0 bg-zinc-100 px-4 text-[14px] font-semibold text-zinc-900 shadow-none hover:bg-zinc-100 hover:text-zinc-900 active:translate-y-0 active:bg-zinc-100";
+const profileBtnGhostIcon =
+  "size-auto rounded-full p-1.5 text-zinc-700 shadow-none hover:bg-transparent hover:text-zinc-700 active:translate-y-0 active:bg-transparent";
+const profileBtnGhostRow =
+  "h-auto justify-start gap-0 p-0 text-left shadow-none hover:bg-transparent active:translate-y-0 active:bg-transparent";
+const profileBtnGhostTab =
+  "rounded-none border-t px-5 py-3 text-[12px] font-semibold tracking-widest shadow-none hover:bg-transparent active:translate-y-0 active:bg-transparent";
+const profileBtnLinkBlue =
+  "mt-5 h-auto p-0 text-[13px] font-semibold text-blue-500 shadow-none hover:bg-transparent hover:text-blue-500 hover:no-underline active:bg-transparent active:text-blue-500";
+const profileBtnHighlight =
+  "flex h-auto shrink-0 flex-col items-center gap-1.5 p-0 shadow-none hover:bg-transparent active:translate-y-0 active:bg-transparent";
+
 /* ─── Post thumbnail ────────────────────────────────────────────── */
 function PostThumb({ post, onClick }: { post: FeedPost; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
-
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="relative aspect-square w-full overflow-hidden bg-zinc-100 focus:outline-none"
+      className="relative aspect-square h-auto w-full overflow-hidden rounded-none bg-zinc-100 p-0 shadow-none hover:bg-zinc-100 active:translate-y-0"
     >
       <img
         src={post.imageUrl}
         alt={post.caption}
-        className={`h-full w-full object-cover transition-transform duration-300 ${hovered ? "scale-105" : "scale-100"}`}
+        className="h-full w-full object-cover"
         draggable={false}
       />
-      {/* Hover overlay */}
-      <div
-        className={`absolute inset-0 flex items-center justify-center gap-5 bg-black/30 transition-opacity duration-200 ${hovered ? "opacity-100" : "opacity-0"}`}
-      >
-        <span className="flex items-center gap-1.5 text-[14px] font-bold text-white drop-shadow">
-          <svg viewBox="0 0 24 24" fill="white" className="size-5">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-          </svg>
-          {post.likesCount.toLocaleString()}
-        </span>
-        <span className="flex items-center gap-1.5 text-[14px] font-bold text-white drop-shadow">
-          <svg viewBox="0 0 24 24" fill="white" className="size-5">
-            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-          </svg>
-          {post.commentsCount}
-        </span>
-      </div>
-    </button>
+    </Button>
   );
 }
 
@@ -179,12 +174,14 @@ function ProfilePage() {
         {sub}
       </p>
       {tab === "posts" && (
-        <button
+        <Button
+          type="button"
+          variant="link"
+          className={profileBtnLinkBlue}
           onClick={() => dispatch(setActiveModal("createPost"))}
-          className="mt-5 text-[13px] font-semibold text-blue-500 hover:text-blue-700 transition"
         >
           Share your first photo
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -220,28 +217,38 @@ function ProfilePage() {
           <div className="flex flex-1 flex-col gap-4">
             {/* Username row */}
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-[20px] font-normal leading-none">
+              <h2
+                className="text-[22px] font-normal leading-none"
+                style={{ color: "black" }}
+              >
                 {authUser.username}
               </h2>
               <Button
                 variant="secondary"
                 size="sm"
-                className="h-8 rounded-lg bg-zinc-100 px-4 text-[14px] font-semibold text-zinc-900 hover:bg-zinc-200 border-0"
+                className={profileBtnSecondary}
+                asChild
               >
-                Edit profile
+                <Link to="/profile/edit">Edit profile</Link>
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
-                className="h-8 rounded-lg bg-zinc-100 px-4 text-[14px] font-semibold text-zinc-900 hover:bg-zinc-200 border-0"
+                className={profileBtnSecondary}
                 onClick={() => dispatch(setActiveModal("createPost"))}
               >
                 <Plus size={15} className="mr-1" />
                 Create
               </Button>
-              <button className="rounded-full p-1.5 text-zinc-700 hover:bg-zinc-100 transition">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Settings"
+                className={profileBtnGhostIcon}
+              >
                 <Settings size={22} strokeWidth={1.75} />
-              </button>
+              </Button>
             </div>
 
             {/* Stats (desktop) */}
@@ -251,30 +258,33 @@ function ProfilePage() {
                 { value: stats.followers.toLocaleString(), label: "followers" },
                 { value: stats.following, label: "following" },
               ].map(({ value, label }) => (
-                <button
+                <Button
                   key={label}
                   type="button"
-                  className="text-center hover:opacity-70 transition"
+                  variant="ghost"
+                  className={`${profileBtnGhostRow} justify-center text-center text-zinc-900`}
                 >
                   <span className="text-[15px] font-bold">{value}</span>
-                  <span className="ml-1 text-[15px] font-normal text-zinc-900">
-                    {label}
-                  </span>
-                </button>
+                  <span className="ml-1 text-[15px] font-normal">{label}</span>
+                </Button>
               ))}
             </div>
 
             {/* Name + bio */}
-            <div>
-              <p className="text-[14px] font-semibold leading-snug">
+            <div className="flex flex-col" style={{ alignItems: "start" }}>
+              <p className="text-[14px] font-semibold leading-snug pb-1">
                 {authUser.fullName}
               </p>
               <p className="mt-0.5 text-[14px] leading-snug text-zinc-700">
                 ✦ Building cool things with React &amp; TypeScript
               </p>
-              <button className="mt-0.5 flex items-center gap-0.5 text-[14px] font-semibold text-zinc-900 hover:underline">
+              <Button
+                type="button"
+                variant="ghost"
+                className={`${profileBtnGhostRow} mt-0.5 flex items-center gap-0.5 text-[14px] font-semibold text-zinc-900`}
+              >
                 more <ChevronDown size={14} />
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -301,27 +311,25 @@ function ProfilePage() {
           style={{ scrollbarWidth: "none" }}
         >
           {/* Add new */}
-          <button
-            type="button"
-            className="flex shrink-0 flex-col items-center gap-1.5"
-          >
-            <div className="flex size-[77px] items-center justify-center rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 text-2xl transition hover:bg-zinc-100">
+          <Button type="button" variant="ghost" className={profileBtnHighlight}>
+            <div className="flex size-[77px] items-center justify-center rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 text-2xl">
               <Plus size={24} strokeWidth={1.5} className="text-zinc-500" />
             </div>
             <span className="text-[12px] text-zinc-600">New</span>
-          </button>
+          </Button>
 
           {HIGHLIGHTS.map((h) => (
-            <button
+            <Button
               key={h.id}
               type="button"
-              className="flex shrink-0 flex-col items-center gap-1.5"
+              variant="ghost"
+              className={profileBtnHighlight}
             >
-              <div className="flex size-[77px] items-center justify-center rounded-full bg-zinc-100 text-[28px] ring-1 ring-zinc-200 transition hover:ring-zinc-400">
+              <div className="flex size-[77px] items-center justify-center rounded-full bg-zinc-100 text-[28px] ring-1 ring-zinc-200">
                 {h.emoji}
               </div>
               <span className="text-[12px] text-zinc-700">{h.label}</span>
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -334,23 +342,20 @@ function ProfilePage() {
               { key: "saved", icon: Bookmark, label: "SAVED" },
               { key: "tagged", icon: Tag, label: "TAGGED" },
             ].map(({ key, icon: Icon, label }) => (
-              <button
+              <Button
                 key={key}
                 type="button"
+                variant="ghost"
                 onClick={() => setTab(key as typeof tab)}
-                className={`
-                  flex items-center gap-1.5 border-t-[1px] px-5 py-3 text-[12px] font-semibold tracking-widest transition
-                  -mt-[1px]
-                  ${
-                    tab === key
-                      ? "border-zinc-900 text-zinc-900"
-                      : "border-transparent text-zinc-400 hover:text-zinc-600"
-                  }
-                `}
+                className={`${profileBtnGhostTab} -mt-px flex items-center gap-1.5 border-t ${
+                  tab === key
+                    ? "border-zinc-900 text-zinc-900 hover:text-zinc-900"
+                    : "border-transparent text-zinc-400 hover:text-zinc-400"
+                }`}
               >
                 <Icon size={13} strokeWidth={2} />
                 <span className="hidden sm:inline">{label}</span>
-              </button>
+              </Button>
             ))}
           </div>
 
