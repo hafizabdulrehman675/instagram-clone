@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Compass,
   Heart,
@@ -281,7 +281,6 @@ function MainLayout() {
   const authUser = useAppSelector((s) => s.auth.user);
   const usersById = useAppSelector((s) => s.users.usersById);
   const allUserIds = useAppSelector((s) => s.users.allUserIds);
-  console.log(usersById);
   const activeModal = useAppSelector((s) => s.ui.activeModal);
   const social = useAppSelector((s) => s.social);
   const location = useLocation();
@@ -316,6 +315,36 @@ function MainLayout() {
       .map((id) => usersById[id])
       .filter((u): u is UserRecord => Boolean(u));
   }, [authUser, allUserIds, usersById]);
+
+  useEffect(() => {
+    const usersRaw = localStorage.getItem("ig_clone_users_v1");
+    const sessionRaw = localStorage.getItem("ig_clone_session_v1");
+
+    let parsedUsers: unknown = null;
+    let parsedSession: unknown = null;
+
+    try {
+      parsedUsers = usersRaw ? JSON.parse(usersRaw) : null;
+    } catch {
+      parsedUsers = "Failed to parse users localStorage JSON";
+    }
+
+    try {
+      parsedSession = sessionRaw ? JSON.parse(sessionRaw) : null;
+    } catch {
+      parsedSession = "Failed to parse session localStorage JSON";
+    }
+
+    console.group("MainLayout localStorage debug");
+    console.log("authUser (redux):", authUser);
+    console.log("usersById (redux):", usersById);
+    console.log("allUserIds (redux):", allUserIds);
+    console.log("ig_clone_users_v1 (raw):", usersRaw);
+    console.log("ig_clone_users_v1 (parsed):", parsedUsers);
+    console.log("ig_clone_session_v1 (raw):", sessionRaw);
+    console.log("ig_clone_session_v1 (parsed):", parsedSession);
+    console.groupEnd();
+  }, [authUser, usersById, allUserIds]);
 
   function handleLogout() {
     dispatch(logout());

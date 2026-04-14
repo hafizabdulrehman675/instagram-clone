@@ -188,8 +188,7 @@ function ProfilePage() {
     return s.posts.feedPostIds
       .map((id) => s.posts.postsById[id])
       .filter(
-        (p): p is FeedPost =>
-          Boolean(p) && p.authorId === profileUser.id,
+        (p): p is FeedPost => Boolean(p) && p.authorId === profileUser.id,
       );
   });
 
