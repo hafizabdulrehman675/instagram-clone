@@ -34,6 +34,7 @@ import type { UserRecord } from "@/features/users/types";
 import {
   acceptFollowRequest,
   cancelFollowRequest,
+  removeFriendship,
   rejectFollowRequest,
   sendFollowRequest,
   unfollow,
@@ -188,10 +189,15 @@ function SuggestedUserRow({
             className={followActionMutedClass}
             onClick={() =>
               dispatch(
-                unfollow({
-                  followerId: authUser.id,
-                  followingId: u.id,
-                }),
+                rel.mutual
+                  ? removeFriendship({
+                      userAId: authUser.id,
+                      userBId: u.id,
+                    })
+                  : unfollow({
+                      followerId: authUser.id,
+                      followingId: u.id,
+                    }),
               )
             }
           >
@@ -298,15 +304,8 @@ function MainLayout() {
     );
   }, [authUser, social.requestsById]);
 
-  const outgoingFollowRequests = useMemo(() => {
-    if (!authUser) return [];
-    return Object.values(social.requestsById).filter(
-      (r) => r.fromUserId === authUser.id && r.status === "pending",
-    );
-  }, [authUser, social.requestsById]);
-
-  const followActivityBadgeCount =
-    incomingFollowRequests.length + outgoingFollowRequests.length;
+  // Badge count mirrors the Follow Requests modal (incoming requests only).
+  const followActivityBadgeCount = incomingFollowRequests.length;
 
   const suggestedUsers = useMemo((): UserRecord[] => {
     if (!authUser) return [];

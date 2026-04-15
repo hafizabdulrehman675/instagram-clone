@@ -106,6 +106,19 @@ const socialSlice = createSlice({
       persistSocial(state);
     },
 
+    removeFriendship(
+      state,
+      action: PayloadAction<{ userAId: string; userBId: string }>,
+    ) {
+      const { userAId, userBId } = action.payload;
+      const aFollowing = state.followingByUserId[userAId] ?? [];
+      const bFollowing = state.followingByUserId[userBId] ?? [];
+
+      state.followingByUserId[userAId] = aFollowing.filter((id) => id !== userBId);
+      state.followingByUserId[userBId] = bFollowing.filter((id) => id !== userAId);
+      persistSocial(state);
+    },
+
     resetDemoSocial(state) {
       const seeded = seedSocial();
       state.followingByUserId = seeded.followingByUserId;
@@ -121,6 +134,7 @@ export const {
   rejectFollowRequest,
   cancelFollowRequest,
   unfollow,
+  removeFriendship,
   resetDemoSocial,
 } = socialSlice.actions;
 

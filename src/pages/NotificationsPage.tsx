@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { Heart, MessageCircle, UserPlus } from "lucide-react";
+import { Heart, Send, UserPlus } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
@@ -7,40 +8,17 @@ import { setActiveModal } from "@/features/ui/redux/uiSlice";
 
 type NotificationItem = {
   id: string;
-  type: "like" | "comment" | "follow";
   username: string;
+  userAvatarUrl: string;
   text: string;
-  time: string;
+  type: "incomingRequest" | "outgoingRequest" | "followingYou";
 };
 
-const MOCK_NOTIFICATIONS: ReadonlyArray<NotificationItem> = [
-  {
-    id: "n1",
-    type: "like",
-    username: "emma_ui",
-    text: "liked your photo.",
-    time: "2m",
-  },
-  {
-    id: "n2",
-    type: "comment",
-    username: "john_doe",
-    text: "commented: Amazing shot 🔥",
-    time: "12m",
-  },
-  {
-    id: "n3",
-    type: "follow",
-    username: "zain_dev",
-    text: "started following you.",
-    time: "1h",
-  },
-];
-
 function NotificationIcon({ type }: { type: NotificationItem["type"] }) {
-  if (type === "like") return <Heart className="h-4 w-4 text-red-500" />;
-  if (type === "comment")
-    return <MessageCircle className="h-4 w-4 text-blue-500" />;
+  if (type === "incomingRequest")
+    return <Heart className="h-4 w-4 text-pink-500" />;
+  if (type === "outgoingRequest")
+    return <Send className="h-4 w-4 text-blue-500" />;
   return <UserPlus className="h-4 w-4 text-green-600" />;
 }
 
@@ -48,17 +26,76 @@ function NotificationsPage() {
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((s) => s.auth.user);
   const social = useAppSelector((s) => s.social);
+  const usersById = useAppSelector((s) => s.users.usersById);
 
   const followActivityCount = useMemo(() => {
     if (!authUser) return 0;
-    const incoming = Object.values(social.requestsById).filter(
+    return Object.values(social.requestsById).filter(
       (r) => r.toUserId === authUser.id && r.status === "pending",
     ).length;
-    const outgoing = Object.values(social.requestsById).filter(
-      (r) => r.fromUserId === authUser.id && r.status === "pending",
-    ).length;
-    return incoming + outgoing;
   }, [authUser, social.requestsById]);
+
+  const notifications = useMemo((): NotificationItem[] => {
+    if (!authUser) return [];
+
+    // Keep one "best" notification per user to avoid stale/conflicting entries.
+    // Priority: incoming request > outgoing request > already following you.
+    const byUserId = new Map<string, NotificationItem>();
+
+    for (const req of Object.values(social.requestsById)) {
+      if (req.status !== "pending") continue;
+      if (req.toUserId === authUser.id) {
+        const from = usersById[req.fromUserId];
+        byUserId.set(req.fromUserId, {
+          id: `incoming_${req.id}`,
+          username: from?.username ?? "unknown_user",
+          userAvatarUrl: from?.avatarUrl ?? "https://i.pravatar.cc/100?u=unknown",
+          text: "requested to follow you.",
+          type: "incomingRequest",
+        });
+      }
+    }
+
+    for (const req of Object.values(social.requestsById)) {
+      if (req.status !== "pending") continue;
+      if (req.fromUserId !== authUser.id) continue;
+      if (byUserId.has(req.toUserId)) continue;
+      const to = usersById[req.toUserId];
+      byUserId.set(req.toUserId, {
+        id: `outgoing_${req.id}`,
+        username: to?.username ?? "unknown_user",
+        userAvatarUrl: to?.avatarUrl ?? "https://i.pravatar.cc/100?u=unknown",
+        text: "has not accepted your follow request yet.",
+        type: "outgoingRequest",
+      });
+    }
+
+    for (const [followerId, followingIds] of Object.entries(
+      social.followingByUserId,
+    )) {
+      if (followerId === authUser.id) continue;
+      if (!followingIds.includes(authUser.id)) continue;
+      if (byUserId.has(followerId)) continue;
+      const from = usersById[followerId];
+      byUserId.set(followerId, {
+        id: `follower_${followerId}`,
+        username: from?.username ?? "unknown_user",
+        userAvatarUrl: from?.avatarUrl ?? "https://i.pravatar.cc/100?u=unknown",
+        text: "is following you.",
+        type: "followingYou",
+      });
+    }
+
+    const order: Record<NotificationItem["type"], number> = {
+      incomingRequest: 0,
+      outgoingRequest: 1,
+      followingYou: 2,
+    };
+
+    return Array.from(byUserId.values()).sort(
+      (a, b) => order[a.type] - order[b.type],
+    );
+  }, [authUser, social.followingByUserId, social.requestsById, usersById]);
 
   return (
     <div className="mx-auto w-full max-w-[630px] space-y-4 px-1 py-4">
@@ -90,26 +127,46 @@ function NotificationsPage() {
       </div>
 
       <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
-        {MOCK_NOTIFICATIONS.map((item, index) => (
-          <div
-            key={item.id}
-            className={`flex items-center gap-3 px-4 py-3 ${
-              index !== MOCK_NOTIFICATIONS.length - 1
-                ? "border-b border-zinc-100"
-                : ""
-            }`}
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100">
-              <NotificationIcon type={item.type} />
-            </div>
-
-            <p className="text-sm text-zinc-800">
-              <span className="font-semibold">{item.username}</span> {item.text}
+        {notifications.length === 0 ? (
+          <div className="px-4 py-10 text-center">
+            <p className="text-sm font-semibold text-zinc-900">
+              No notifications yet
             </p>
-
-            <span className="ml-auto text-xs text-zinc-500">{item.time}</span>
+            <p className="mt-1 text-xs text-zinc-500">
+              Follow activity will appear here.
+            </p>
           </div>
-        ))}
+        ) : (
+          notifications.map((item, index) => (
+            <div
+              key={item.id}
+              className={`flex items-center gap-3 px-4 py-3 ${
+                index !== notifications.length - 1 ? "border-b border-zinc-100" : ""
+              }`}
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100">
+                <NotificationIcon type={item.type} />
+              </div>
+
+              <Link
+                to={`/profile/${encodeURIComponent(item.username)}`}
+                className="flex min-w-0 flex-1 items-center gap-3"
+              >
+                <img
+                  src={item.userAvatarUrl}
+                  alt={item.username}
+                  className="h-9 w-9 rounded-full object-cover"
+                />
+                <p className="truncate text-sm text-zinc-800">
+                  <span className="font-semibold">{item.username}</span>{" "}
+                  {item.text}
+                </p>
+              </Link>
+
+              <span className="ml-auto text-xs text-zinc-500">now</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
