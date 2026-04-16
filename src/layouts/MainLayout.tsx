@@ -342,6 +342,7 @@ function MainLayout() {
     console.log("ig_clone_users_v1 (parsed):", parsedUsers);
     console.log("ig_clone_session_v1 (raw):", sessionRaw);
     console.log("ig_clone_session_v1 (parsed):", parsedSession);
+    console.log("Social_state", social);
     console.groupEnd();
   }, [authUser, usersById, allUserIds]);
 

@@ -12,179 +12,21 @@ import {
   Mic,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useAppSelector } from "@/app/hooks";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import {
+  messageSentOptimistic,
+  threadRead,
+  toggleMessageReaction,
+} from "@/features/messages/redux/messagesSlice";
+import type { MessageEntity, ThreadEntity } from "@/features/messages/types";
 
-/* ─── Types ─────────────────────────────────────────────────────── */
-type Message = {
+type MessageView = MessageEntity & { timestamp: Date };
+type ConversationView = {
   id: string;
-  senderId: string;
-  text: string;
-  timestamp: Date;
-  reacted?: string;
-  seen?: boolean;
-};
-
-type Conversation = {
-  id: string;
-  user: {
-    id: string;
-    username: string;
-    fullName: string;
-    avatarUrl: string;
-    isOnline: boolean;
-    lastSeen?: string;
-  };
-  messages: Message[];
+  user: ThreadEntity["peer"];
+  messages: MessageView[];
   unreadCount: number;
 };
-
-/* ─── Seed data ──────────────────────────────────────────────────── */
-const SEED_CONVOS: Conversation[] = [
-  {
-    id: "c1",
-    user: {
-      id: "u2",
-      username: "emma_dev",
-      fullName: "Emma Dev",
-      avatarUrl: "https://i.pravatar.cc/100?img=47",
-      isOnline: true,
-    },
-    unreadCount: 2,
-    messages: [
-      {
-        id: "m1",
-        senderId: "u2",
-        text: "Hey! Saw your latest post 🔥",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-      },
-      {
-        id: "m2",
-        senderId: "me",
-        text: "Thanks! Been working on it all week 😄",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1.9),
-        seen: true,
-      },
-      {
-        id: "m3",
-        senderId: "u2",
-        text: "The UI looks insane, what stack are you using?",
-        timestamp: new Date(Date.now() - 1000 * 60 * 30),
-      },
-      {
-        id: "m4",
-        senderId: "u2",
-        text: "Also are you free to collab sometime?",
-        timestamp: new Date(Date.now() - 1000 * 60 * 28),
-      },
-    ],
-  },
-  {
-    id: "c2",
-    user: {
-      id: "u3",
-      username: "ali.codes",
-      fullName: "Ali Ahmed",
-      avatarUrl: "https://i.pravatar.cc/100?img=52",
-      isOnline: true,
-    },
-    unreadCount: 0,
-    messages: [
-      {
-        id: "m5",
-        senderId: "me",
-        text: "Did you push the PR yet?",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5),
-        seen: true,
-      },
-      {
-        id: "m6",
-        senderId: "u3",
-        text: "Yeah just now, check it out!",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4.8),
-      },
-      {
-        id: "m7",
-        senderId: "me",
-        text: "Looks good, I'll review tonight 👍",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4.5),
-        seen: true,
-      },
-    ],
-  },
-  {
-    id: "c3",
-    user: {
-      id: "u4",
-      username: "zain_dev",
-      fullName: "Zain Dev",
-      avatarUrl: "https://i.pravatar.cc/100?img=55",
-      isOnline: false,
-      lastSeen: "Yesterday",
-    },
-    unreadCount: 0,
-    messages: [
-      {
-        id: "m8",
-        senderId: "u4",
-        text: "Bro the new component library is 🤌",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
-      },
-      {
-        id: "m9",
-        senderId: "me",
-        text: "Right?? Tailwind + shadcn is unbeatable",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 23.8),
-        seen: true,
-      },
-    ],
-  },
-  {
-    id: "c4",
-    user: {
-      id: "u5",
-      username: "sara.ui",
-      fullName: "Sara UI",
-      avatarUrl: "https://i.pravatar.cc/100?img=41",
-      isOnline: false,
-      lastSeen: "2d ago",
-    },
-    unreadCount: 1,
-    messages: [
-      {
-        id: "m10",
-        senderId: "u5",
-        text: "Can you review my Figma file?",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48),
-      },
-    ],
-  },
-  {
-    id: "c5",
-    user: {
-      id: "u6",
-      username: "reacthub",
-      fullName: "React Hub",
-      avatarUrl: "https://i.pravatar.cc/100?img=60",
-      isOnline: true,
-    },
-    unreadCount: 0,
-    messages: [
-      {
-        id: "m11",
-        senderId: "me",
-        text: "Are you going to the meetup?",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72),
-        seen: true,
-      },
-      {
-        id: "m12",
-        senderId: "u6",
-        text: "For sure! See you there 🙌",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 71),
-      },
-    ],
-  },
-];
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
 function formatTime(date: Date): string {
@@ -204,7 +46,7 @@ function formatMsgTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function shouldShowTimestamp(messages: Message[], index: number): boolean {
+function shouldShowTimestamp(messages: MessageView[], index: number): boolean {
   if (index === 0) return true;
   const prev = messages[index - 1];
   const curr = messages[index];
@@ -221,7 +63,7 @@ function ConvoItem({
   myId,
   onClick,
 }: {
-  convo: Conversation;
+  convo: ConversationView;
   active: boolean;
   myId: string;
   onClick: () => void;
@@ -287,7 +129,7 @@ function ChatBubble({
   avatar,
   onReact,
 }: {
-  msg: Message;
+  msg: MessageView;
   isMine: boolean;
   showAvatar: boolean;
   avatar: string;
@@ -401,10 +243,13 @@ function EmptyChat() {
 
 /* ─── Main component ─────────────────────────────────────────────── */
 function MessagesPage() {
+  const dispatch = useAppDispatch();
   const authUser = useAppSelector((s) => s.auth.user);
   const myId = authUser?.id ?? "me";
+  const threadsById = useAppSelector((s) => s.messages.threadsById);
+  const threadIds = useAppSelector((s) => s.messages.threadIds);
+  const messagesById = useAppSelector((s) => s.messages.messagesById);
 
-  const [convos, setConvos] = useState<Conversation[]>(SEED_CONVOS);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [search, setSearch] = useState("");
@@ -412,6 +257,21 @@ function MessagesPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const convos = useMemo((): ConversationView[] => {
+    return threadIds
+      .map((id) => threadsById[id])
+      .filter((t): t is ThreadEntity => Boolean(t))
+      .map((t) => ({
+        id: t.id,
+        user: t.peer,
+        unreadCount: t.unreadCountByUserId[myId] ?? 0,
+        messages: t.messageIds
+          .map((messageId) => messagesById[messageId])
+          .filter((m): m is MessageEntity => Boolean(m))
+          .map((m) => ({ ...m, timestamp: new Date(m.createdAt) })),
+      }));
+  }, [threadIds, threadsById, messagesById, myId]);
 
   const activeConvo = useMemo(
     () => convos.find((c) => c.id === activeId) ?? null,
@@ -437,9 +297,7 @@ function MessagesPage() {
   function openConvo(id: string) {
     setActiveId(id);
     setMobileView("chat");
-    setConvos((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)),
-    );
+    dispatch(threadRead({ threadId: id, userId: myId }));
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
@@ -448,38 +306,20 @@ function MessagesPage() {
     const text = inputText.trim();
     if (!text || !activeId) return;
 
-    const newMsg: Message = {
-      id: `m_${Date.now()}`,
-      senderId: myId,
-      text,
-      timestamp: new Date(),
-      seen: false,
-    };
-
-    setConvos((prev) =>
-      prev.map((c) =>
-        c.id === activeId ? { ...c, messages: [...c.messages, newMsg] } : c,
-      ),
+    dispatch(
+      messageSentOptimistic({
+        threadId: activeId,
+        senderId: myId,
+        text,
+      }),
     );
     setInputText("");
   }
 
   /* React to a message */
-  function reactToMessage(convoId: string, msgId: string, emoji: string) {
-    setConvos((prev) =>
-      prev.map((c) =>
-        c.id === convoId
-          ? {
-              ...c,
-              messages: c.messages.map((m) =>
-                m.id === msgId
-                  ? { ...m, reacted: m.reacted === emoji ? undefined : emoji }
-                  : m,
-              ),
-            }
-          : c,
-      ),
-    );
+  function reactToMessage(_convoId: string, msgId: string, emoji: string) {
+    void _convoId;
+    dispatch(toggleMessageReaction({ messageId: msgId, emoji }));
   }
 
   return (
