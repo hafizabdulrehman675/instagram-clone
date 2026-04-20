@@ -6,7 +6,7 @@ import type {
   ThreadPeer,
 } from "@/features/messages/types";
 
-const STORAGE_KEY = "ig_clone_messages_v1";
+const STORAGE_KEY = "ig_clone_messages_v2";
 
 function loadMessages(): MessagesState | null {
   try {
@@ -29,6 +29,9 @@ function upsertThread(state: MessagesState, thread: ThreadEntity) {
         ...existing,
         ...thread,
         peer: { ...existing.peer, ...thread.peer },
+        participantIds: thread.participantIds.length
+          ? thread.participantIds
+          : existing.participantIds,
       }
     : thread;
 
@@ -48,6 +51,7 @@ function seedMessages(): MessagesState {
         avatarUrl: "https://i.pravatar.cc/100?u=second",
         isOnline: true,
       },
+      participantIds: ["u1", "u2"],
       messageIds: ["m1", "m2", "m3"],
       unreadCountByUserId: { u1: 1, u2: 0 },
     },
@@ -100,6 +104,7 @@ const messagesSlice = createSlice({
       state.threadsById[id] = {
         id,
         peer: action.payload.peer,
+        participantIds: [action.payload.myUserId, action.payload.peer.id],
         messageIds: [],
         unreadCountByUserId: { [action.payload.myUserId]: 0 },
         lastReadMessageIdByUserId: { [action.payload.myUserId]: null },

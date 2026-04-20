@@ -10,15 +10,17 @@ import {
   Smile,
   ChevronLeft,
   Mic,
+  Edit3,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import {
   messageSentOptimistic,
+  startThread,
   threadRead,
   toggleMessageReaction,
 } from "@/features/messages/redux/messagesSlice";
-import type { MessageEntity, ThreadEntity } from "@/features/messages/types";
+import type { MessageEntity, ThreadEntity, ThreadPeer } from "@/features/messages/types";
 
 type MessageView = MessageEntity & { timestamp: Date };
 type ConversationView = {
@@ -245,10 +247,12 @@ function EmptyChat() {
 function MessagesPage() {
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((s) => s.auth.user);
-  const myId = authUser?.id ?? "me";
+  const myId = authUser?.id ?? "";
   const threadsById = useAppSelector((s) => s.messages.threadsById);
   const threadIds = useAppSelector((s) => s.messages.threadIds);
   const messagesById = useAppSelector((s) => s.messages.messagesById);
+  const usersById = useAppSelector((s) => s.users.usersById);
+  const followingByUserId = useAppSelector((s) => s.social.followingByUserId);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
@@ -258,20 +262,50 @@ function MessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  /** IDs of users this account follows OR who follow this account (friends/following). */
+  const contactableUserIds = useMemo(() => {
+    if (!myId) return [];
+    const iFollow = followingByUserId[myId] ?? [];
+    const followMe = Object.entries(followingByUserId)
+      .filter(([uid, list]) => uid !== myId && list.includes(myId))
+      .map(([uid]) => uid);
+    return Array.from(new Set([...iFollow, ...followMe]));
+  }, [myId, followingByUserId]);
+
   const convos = useMemo((): ConversationView[] => {
     return threadIds
       .map((id) => threadsById[id])
-      .filter((t): t is ThreadEntity => Boolean(t))
-      .map((t) => ({
-        id: t.id,
-        user: t.peer,
-        unreadCount: t.unreadCountByUserId[myId] ?? 0,
-        messages: t.messageIds
-          .map((messageId) => messagesById[messageId])
-          .filter((m): m is MessageEntity => Boolean(m))
-          .map((m) => ({ ...m, timestamp: new Date(m.createdAt) })),
-      }));
-  }, [threadIds, threadsById, messagesById, myId]);
+      .filter((t): t is ThreadEntity => {
+        if (!t || !t.peer) return false;
+        // Only show threads the current user is part of.
+        if (!myId) return false;
+        return t.participantIds?.includes(myId) ?? false;
+      })
+      .map((t) => {
+        // Resolve the peer from usersById so both sides see the correct person.
+        const otherId = t.participantIds.find((id) => id !== myId) ?? t.peer.id;
+        const userRecord = usersById[otherId];
+        const peer: ThreadPeer = userRecord
+          ? {
+              id: userRecord.id,
+              username: userRecord.username,
+              fullName: userRecord.fullName,
+              avatarUrl: userRecord.avatarUrl,
+              isOnline: t.peer.id === otherId ? t.peer.isOnline : false,
+              lastSeen: t.peer.id === otherId ? t.peer.lastSeen : undefined,
+            }
+          : t.peer;
+        return {
+          id: t.id,
+          user: peer,
+          unreadCount: t.unreadCountByUserId[myId] ?? 0,
+          messages: t.messageIds
+            .map((messageId) => messagesById[messageId])
+            .filter((m): m is MessageEntity => Boolean(m))
+            .map((m) => ({ ...m, timestamp: new Date(m.createdAt) })),
+        };
+      });
+  }, [threadIds, threadsById, messagesById, myId, usersById]);
 
   const activeConvo = useMemo(
     () => convos.find((c) => c.id === activeId) ?? null,
@@ -322,6 +356,38 @@ function MessagesPage() {
     dispatch(toggleMessageReaction({ messageId: msgId, emoji }));
   }
 
+  /** Start (or open) a conversation with a user from the social graph. */
+  function startConversationWith(userId: string) {
+    const existing = convos.find((c) => c.user.id === userId);
+    if (existing) {
+      openConvo(existing.id);
+      return;
+    }
+    const userRecord = usersById[userId];
+    if (!userRecord || !myId) return;
+    const peer: ThreadPeer = {
+      id: userRecord.id,
+      username: userRecord.username,
+      fullName: userRecord.fullName,
+      avatarUrl: userRecord.avatarUrl,
+      isOnline: false,
+    };
+    const threadId = `t_${myId}_${userId}`;
+    dispatch(startThread({ threadId, peer, myUserId: myId }));
+    setActiveId(threadId);
+    setMobileView("chat");
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }
+
+  /** Contacts from social graph that don't yet have an active thread. */
+  const newContacts = useMemo(() => {
+    const existingPeerIds = new Set(convos.map((c) => c.user.id));
+    return contactableUserIds
+      .filter((uid) => !existingPeerIds.has(uid))
+      .map((uid) => usersById[uid])
+      .filter(Boolean);
+  }, [contactableUserIds, convos, usersById]);
+
   return (
     <div className="flex h-screen bg-white">
       {/* ══ LEFT: Conversation list ══════════════════════════════════ */}
@@ -333,16 +399,17 @@ function MessagesPage() {
       `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <h2
-              className="font-bold text-zinc-900"
-              style={{ color: "black", fontSize: "50px" }}
-            >
-              {/* {authUser?.username ?? "Messages"} */}
-              Messages
-            </h2>
-          </div>
+        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+          <h2 className="text-[18px] font-bold text-zinc-900">
+            {authUser?.username ?? "Messages"}
+          </h2>
+          <button
+            type="button"
+            title="New message"
+            className="rounded-full p-1.5 text-zinc-900 hover:bg-zinc-100 transition"
+          >
+            <Edit3 size={20} strokeWidth={1.75} />
+          </button>
         </div>
 
         {/* Search */}
@@ -360,20 +427,59 @@ function MessagesPage() {
 
         {/* List */}
         <div className="flex-1 overflow-y-auto scrollbar-hide px-2 py-1">
-          {filteredConvos.length === 0 ? (
+          {/* Active threads */}
+          {filteredConvos.map((c) => (
+            <ConvoItem
+              key={c.id}
+              convo={c}
+              active={c.id === activeId}
+              myId={myId}
+              onClick={() => openConvo(c.id)}
+            />
+          ))}
+
+          {/* People from social graph with no thread yet */}
+          {newContacts.length > 0 && (
+            <>
+              <p className="px-3 pt-4 pb-1 text-[13px] font-semibold text-zinc-500">
+                {filteredConvos.length > 0 ? "Also" : ""} People you follow
+              </p>
+              {newContacts
+                .filter(
+                  (u) =>
+                    u.username.toLowerCase().includes(search.toLowerCase()) ||
+                    u.fullName.toLowerCase().includes(search.toLowerCase()),
+                )
+                .map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => startConversationWith(u.id)}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-zinc-50 transition-colors"
+                  >
+                    <Avatar className="size-[56px] shrink-0">
+                      <AvatarImage src={u.avatarUrl} alt={u.username} />
+                      <AvatarFallback>
+                        {u.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-normal text-zinc-900">
+                        {u.username}
+                      </p>
+                      <p className="truncate text-[13px] text-zinc-500">
+                        {u.fullName}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+            </>
+          )}
+
+          {filteredConvos.length === 0 && newContacts.length === 0 && (
             <p className="py-8 text-center text-[13px] text-zinc-400">
               No conversations found
             </p>
-          ) : (
-            filteredConvos.map((c) => (
-              <ConvoItem
-                key={c.id}
-                convo={c}
-                active={c.id === activeId}
-                myId={myId}
-                onClick={() => openConvo(c.id)}
-              />
-            ))
           )}
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { SocialState } from "@/features/social/types";
 
-const STORAGE_KEY = "ig_clone_social_v1";
+const STORAGE_KEY = "ig_clone_social_v2";
 
 function loadSocial(): SocialState | null {
   try {
@@ -15,7 +15,10 @@ function loadSocial(): SocialState | null {
 
 function seedSocial(): SocialState {
   return {
-    followingByUserId: {},
+    followingByUserId: {
+      u1: ["u2"],
+      u2: ["u1"],
+    },
     requestsById: {},
   };
 }

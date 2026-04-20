@@ -28,6 +28,8 @@ export type MessageEntity = {
 export type ThreadEntity = {
   id: string;
   peer: ThreadPeer;
+  /** Both user IDs in this thread — used to filter threads per logged-in user and resolve peer. */
+  participantIds: string[];
   messageIds: string[];
   unreadCountByUserId: Record<string, number>;
   /**
