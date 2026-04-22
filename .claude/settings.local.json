@@ -3,7 +3,9 @@
     "allow": [
       "Bash(xargs grep *)",
       "Bash(xargs ls *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(find /d -maxdepth 4 -iname \"natours\" -type d)",
+      "Bash(find /c -maxdepth 5 -iname \"natours\" -type d)"
     ]
   }
 }
