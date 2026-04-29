@@ -1,12 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 
+import { apiRequest } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { useAppSelector } from "@/app/hooks";
 import type { FeedPost } from "@/features/posts/types";
+import type { UserRecord } from "@/features/users/types";
 
 function ExplorePage() {
   const [query, setQuery] = useState<string>("");
+  const [searchUsers, setSearchUsers] = useState<UserRecord[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const authToken = useAppSelector((s) => s.auth.token);
 
   const posts = useAppSelector((state) =>
     state.posts.feedPostIds
@@ -26,6 +32,49 @@ function ExplorePage() {
     );
   }, [posts, query]);
 
+  useEffect(() => {
+    const q = query.trim();
+    if (!q || !authToken) {
+      setSearchUsers([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsSearching(true);
+        const response = await apiRequest<{
+          data: {
+            users: Array<{
+              id: string | number;
+              username: string;
+              fullName: string;
+              avatarUrl: string | null;
+              bio?: string | null;
+            }>;
+          };
+        }>(`/api/users/search?q=${encodeURIComponent(q)}`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+
+        setSearchUsers(
+          response.data.users.map((u) => ({
+            id: String(u.id),
+            username: u.username,
+            fullName: u.fullName,
+            email: "",
+            avatarUrl: u.avatarUrl ?? null,
+          })),
+        );
+      } catch {
+        setSearchUsers([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [query, authToken]);
+
   return (
     <div className="mx-auto w-full max-w-[630px] space-y-4 px-1 py-4">
       <div className="relative">
@@ -38,7 +87,41 @@ function ExplorePage() {
         />
       </div>
 
-      {filteredPosts.length === 0 ? (
+      {query.trim() ? (
+        <div className="space-y-2">
+          {isSearching ? (
+            <div className="rounded-md border border-zinc-200 bg-white p-6 text-center">
+              <p className="text-sm text-zinc-500">Searching users...</p>
+            </div>
+          ) : searchUsers.length === 0 ? (
+            <div className="rounded-md border border-zinc-200 bg-white p-6 text-center">
+              <p className="text-sm font-semibold text-zinc-900">
+                No users found
+              </p>
+            </div>
+          ) : (
+            searchUsers.map((user) => (
+              <Link
+                key={user.id}
+                to={`/profile/${encodeURIComponent(user.username)}`}
+                className="flex items-center gap-3 rounded-md border border-zinc-200 bg-white p-3 hover:bg-zinc-50"
+              >
+                <img
+                  src={user.avatarUrl || "https://i.pravatar.cc/100?u=fallback"}
+                  alt={user.username}
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    {user.username}
+                  </p>
+                  <p className="text-xs text-zinc-500">{user.fullName}</p>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      ) : filteredPosts.length === 0 ? (
         <div className="rounded-md border border-zinc-200 bg-white p-6 text-center">
           <p className="text-sm font-semibold text-zinc-900">
             No results found

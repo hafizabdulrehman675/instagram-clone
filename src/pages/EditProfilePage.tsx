@@ -5,6 +5,7 @@ import * as Yup from "yup";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ApiError, apiRequest } from "@/lib/api";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { updateAuthenticatedUser } from "@/features/auth/redux/authSlice";
 import { syncPostAuthorUsername } from "@/features/posts/redux/postsSlice";
@@ -52,9 +53,7 @@ function EditProfilePage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((s) => s.auth.user);
-  const usersById = useAppSelector((s) => s.users.usersById);
-
-  const record = authUser ? usersById[authUser.id] : undefined;
+  const authToken = useAppSelector((s) => s.auth.token);
 
   const formik = useFormik({
     enableReinitialize: true,
@@ -67,70 +66,85 @@ function EditProfilePage() {
       confirmNewPassword: "",
     },
     validationSchema: EditProfileSchema,
-    onSubmit: (values, { setFieldError, setSubmitting }) => {
-      if (!authUser || !record) {
+    onSubmit: async (values, { setFieldError, setSubmitting }) => {
+      if (!authUser || !authToken) {
         setSubmitting(false);
         return;
       }
+      try {
+        const u = values.username.trim();
+        const e = values.email.trim();
+        const newPw =
+          values.newPassword.trim().length > 0
+            ? values.newPassword.trim()
+            : undefined;
 
-      if (values.currentPassword !== record.password) {
-        setFieldError("currentPassword", "Current password is incorrect.");
-        setSubmitting(false);
-        return;
-      }
+        await apiRequest<{
+          data: {
+            user: {
+              id: number | string;
+              username: string;
+              fullName: string;
+              email: string;
+              avatarUrl: string | null;
+            };
+          };
+        }>("/api/users/me", {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({
+            fullName: values.fullName.trim(),
+            username: u,
+            email: e,
+            currentPassword: values.currentPassword,
+            newPassword: newPw,
+          }),
+        });
 
-      const u = values.username.trim();
-      const e = values.email.trim();
-      const others = Object.values(usersById).filter(
-        (x) => x.id !== authUser.id,
-      );
-      if (others.some((x) => x.username === u)) {
-        setFieldError("username", "Username already taken.");
-        setSubmitting(false);
-        return;
-      }
-      if (others.some((x) => x.email === e)) {
-        setFieldError("email", "Email already in use.");
-        setSubmitting(false);
-        return;
-      }
-
-      const newPw =
-        values.newPassword.trim().length > 0
-          ? values.newPassword.trim()
-          : undefined;
-
-      dispatch(
-        updateUserProfile({
-          userId: authUser.id,
-          fullName: values.fullName.trim(),
-          username: u,
-          email: e,
-          newPassword: newPw,
-        }),
-      );
-
-      if (authUser.username !== u) {
         dispatch(
-          syncPostAuthorUsername({
+          updateUserProfile({
             userId: authUser.id,
-            fromUsername: authUser.username,
-            toUsername: u,
-            avatarUrl: authUser.avatarUrl,
+            fullName: values.fullName.trim(),
+            username: u,
+            email: e,
+            newPassword: newPw,
           }),
         );
+
+        if (authUser.username !== u) {
+          dispatch(
+            syncPostAuthorUsername({
+              userId: authUser.id,
+              fromUsername: authUser.username,
+              toUsername: u,
+              avatarUrl: authUser.avatarUrl,
+            }),
+          );
+        }
+
+        dispatch(
+          updateAuthenticatedUser({
+            fullName: values.fullName.trim(),
+            username: u,
+            email: e,
+          }),
+        );
+
+        navigate("/profile");
+      } catch (error) {
+        if (error instanceof ApiError) {
+          const message = error.message.toLowerCase();
+          if (message.includes("password")) {
+            setFieldError("currentPassword", error.message);
+          } else if (message.includes("username")) {
+            setFieldError("username", error.message);
+          } else if (message.includes("email")) {
+            setFieldError("email", error.message);
+          }
+        }
+      } finally {
+        setSubmitting(false);
       }
-
-      dispatch(
-        updateAuthenticatedUser({
-          fullName: values.fullName.trim(),
-          username: u,
-          email: e,
-        }),
-      );
-
-      navigate("/login");
-      setSubmitting(false);
     },
   });
 

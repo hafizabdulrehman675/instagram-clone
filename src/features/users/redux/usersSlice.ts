@@ -57,6 +57,19 @@ const usersSlice = createSlice({
   name: "users",
   initialState,
   reducers: {
+    replaceUsers(state, action: PayloadAction<UserRecord[]>) {
+      const usersById: Record<string, UserRecord> = {};
+      const allUserIds: string[] = [];
+
+      for (const user of action.payload) {
+        usersById[user.id] = user;
+        allUserIds.push(user.id);
+      }
+
+      state.usersById = usersById;
+      state.allUserIds = allUserIds;
+    },
+
     registerUser(state, action: PayloadAction<UserRecord>) {
       const user = action.payload;
 
@@ -95,6 +108,6 @@ const usersSlice = createSlice({
   },
 });
 
-export const { registerUser, resetDemoUsers, updateUserProfile } =
+export const { replaceUsers, registerUser, resetDemoUsers, updateUserProfile } =
   usersSlice.actions;
 export default usersSlice.reducer;

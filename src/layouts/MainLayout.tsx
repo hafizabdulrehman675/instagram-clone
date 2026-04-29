@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Compass,
   Heart,
@@ -29,8 +29,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { setActiveModal } from "@/features/ui/redux/uiSlice";
+import { apiRequest } from "@/lib/api";
 import type { SocialState } from "@/features/social/types";
 import type { UserRecord } from "@/features/users/types";
+import { replaceUsers } from "@/features/users/redux/usersSlice";
 import {
   acceptFollowRequest,
   cancelFollowRequest,
@@ -285,6 +287,7 @@ function MainLayout() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const authUser = useAppSelector((s) => s.auth.user);
+  const authToken = useAppSelector((s) => s.auth.token);
   const usersById = useAppSelector((s) => s.users.usersById);
   const allUserIds = useAppSelector((s) => s.users.allUserIds);
   const activeModal = useAppSelector((s) => s.ui.activeModal);
@@ -314,6 +317,44 @@ function MainLayout() {
       .map((id) => usersById[id])
       .filter((u): u is UserRecord => Boolean(u));
   }, [authUser, allUserIds, usersById]);
+
+  useEffect(() => {
+    async function loadUsersFromBackend() {
+      if (!authUser || !authToken) return;
+
+      try {
+        const response = await apiRequest<{
+          data: {
+            users: Array<{
+              id: number | string;
+              username: string;
+              fullName: string;
+              email?: string;
+              avatarUrl: string | null;
+            }>;
+          };
+        }>("/api/users", {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+
+        const backendUsers: UserRecord[] = response.data.users.map((u) => ({
+          id: String(u.id),
+          username: u.username,
+          fullName: u.fullName,
+          email: u.email || "",
+          avatarUrl: u.avatarUrl ?? null,
+        }));
+
+        // /api/users excludes logged user; include auth user explicitly.
+        const merged = [authUser, ...backendUsers];
+        dispatch(replaceUsers(merged));
+      } catch {
+        // Keep existing in-memory users state if backend fetch fails.
+      }
+    }
+
+    loadUsersFromBackend();
+  }, [authUser, authToken, dispatch]);
 
   /*
     LocalStorage debug reference (disabled intentionally after backend connectivity):
