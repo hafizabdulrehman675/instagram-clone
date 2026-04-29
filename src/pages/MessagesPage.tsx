@@ -15,12 +15,17 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import {
+  messageAcked,
   messageSentOptimistic,
+  readCursorUpdated,
   startThread,
   threadRead,
   toggleMessageReaction,
+  upsertMessagesFromServer,
+  upsertThreadFromServer,
 } from "@/features/messages/redux/messagesSlice";
 import type { MessageEntity, ThreadEntity, ThreadPeer } from "@/features/messages/types";
+import { apiRequest } from "@/lib/api";
 
 type MessageView = MessageEntity & { timestamp: Date };
 type ConversationView = {
@@ -247,6 +252,7 @@ function EmptyChat() {
 function MessagesPage() {
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((s) => s.auth.user);
+  const authToken = useAppSelector((s) => s.auth.token);
   const myId = authUser?.id ?? "";
   const threadsById = useAppSelector((s) => s.messages.threadsById);
   const threadIds = useAppSelector((s) => s.messages.threadIds);
@@ -327,27 +333,106 @@ function MessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeConvo?.messages.length]);
 
+  useEffect(() => {
+    async function loadThreads() {
+      if (!authToken || !myId) return;
+      try {
+        const response = await apiRequest<{
+          data: {
+            threads: ThreadEntity[];
+          };
+        }>("/api/messages/threads", {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+
+        for (const thread of response.data.threads || []) {
+          dispatch(upsertThreadFromServer(thread));
+        }
+      } catch {
+        // Keep existing local messages state if backend fetch fails.
+      }
+    }
+
+    loadThreads();
+  }, [authToken, myId, dispatch]);
+
   /* Mark as read on open */
-  function openConvo(id: string) {
+  async function openConvo(id: string) {
     setActiveId(id);
     setMobileView("chat");
     dispatch(threadRead({ threadId: id, userId: myId }));
     setTimeout(() => inputRef.current?.focus(), 100);
+
+    if (!authToken || !myId) return;
+
+    try {
+      const messagesResponse = await apiRequest<{
+        data: { messages: MessageEntity[] };
+      }>(`/api/messages/threads/${id}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      dispatch(upsertMessagesFromServer(messagesResponse.data.messages || []));
+    } catch {
+      // Keep current thread messages if backend fetch fails.
+    }
+
+    try {
+      const readResponse = await apiRequest<{
+        data: { threadId: string; lastReadMessageId: string | null };
+      }>(`/api/messages/threads/${id}/read`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      dispatch(
+        readCursorUpdated({
+          threadId: readResponse.data.threadId,
+          userId: myId,
+          lastReadMessageId: readResponse.data.lastReadMessageId,
+        }),
+      );
+    } catch {
+      // Read cursor sync is best-effort.
+    }
   }
 
   /* Send message */
-  function sendMessage() {
+  async function sendMessage() {
     const text = inputText.trim();
     if (!text || !activeId) return;
 
+    const clientTempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     dispatch(
       messageSentOptimistic({
         threadId: activeId,
         senderId: myId,
         text,
+        clientTempId,
       }),
     );
     setInputText("");
+
+    if (!authToken) return;
+
+    try {
+      const response = await apiRequest<{ data: { message: MessageEntity } }>(
+        `/api/messages/threads/${activeId}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ text, clientTempId }),
+        },
+      );
+
+      dispatch(
+        messageAcked({
+          threadId: activeId,
+          clientTempId,
+          serverMessage: response.data.message,
+        }),
+      );
+    } catch {
+      // Keep optimistic message if backend send fails for now.
+    }
   }
 
   /* React to a message */
@@ -357,14 +442,33 @@ function MessagesPage() {
   }
 
   /** Start (or open) a conversation with a user from the social graph. */
-  function startConversationWith(userId: string) {
+  async function startConversationWith(userId: string) {
     const existing = convos.find((c) => c.user.id === userId);
     if (existing) {
-      openConvo(existing.id);
+      void openConvo(existing.id);
       return;
     }
     const userRecord = usersById[userId];
     if (!userRecord || !myId) return;
+
+    if (authToken) {
+      try {
+        const response = await apiRequest<{ data: { thread: ThreadEntity } }>(
+          "/api/messages/threads",
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify({ userId }),
+          },
+        );
+        dispatch(upsertThreadFromServer(response.data.thread));
+        void openConvo(response.data.thread.id);
+        return;
+      } catch {
+        // Fallback to local thread creation below.
+      }
+    }
+
     const peer: ThreadPeer = {
       id: userRecord.id,
       username: userRecord.username,
@@ -374,9 +478,7 @@ function MessagesPage() {
     };
     const threadId = `t_${myId}_${userId}`;
     dispatch(startThread({ threadId, peer, myUserId: myId }));
-    setActiveId(threadId);
-    setMobileView("chat");
-    setTimeout(() => inputRef.current?.focus(), 100);
+    void openConvo(threadId);
   }
 
   /** Contacts from social graph that don't yet have an active thread. */
@@ -434,7 +536,7 @@ function MessagesPage() {
               convo={c}
               active={c.id === activeId}
               myId={myId}
-              onClick={() => openConvo(c.id)}
+              onClick={() => void openConvo(c.id)}
             />
           ))}
 
@@ -454,7 +556,7 @@ function MessagesPage() {
                   <button
                     key={u.id}
                     type="button"
-                    onClick={() => startConversationWith(u.id)}
+                    onClick={() => void startConversationWith(u.id)}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-zinc-50 transition-colors"
                   >
                     <Avatar className="size-[56px] shrink-0">
@@ -606,7 +708,7 @@ function MessagesPage() {
                   type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                  onKeyDown={(e) => e.key === "Enter" && void sendMessage()}
                   placeholder="Message…"
                   className="flex-1 bg-transparent text-[14px] text-zinc-900 outline-none placeholder:text-zinc-400"
                 />
@@ -615,7 +717,7 @@ function MessagesPage() {
                   /* Send */
                   <button
                     type="button"
-                    onClick={sendMessage}
+                    onClick={() => void sendMessage()}
                     className="shrink-0 text-[14px] font-semibold text-blue-500 hover:text-blue-700 transition active:scale-95"
                   >
                     Send

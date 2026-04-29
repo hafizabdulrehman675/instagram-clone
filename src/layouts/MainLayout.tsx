@@ -109,10 +109,12 @@ const followActionMutedClass =
 function SuggestedUserRow({
   user: u,
   authUser,
+  authToken,
   social,
 }: {
   user: UserRecord;
   authUser: { id: string; username: string };
+  authToken: string | null;
   social: SocialState;
 }) {
   const dispatch = useAppDispatch();
@@ -150,9 +152,19 @@ function SuggestedUserRow({
               type="button"
               size="sm"
               className="h-7 rounded-md bg-[#0095f6] px-2.5 text-[11px] font-semibold text-white hover:bg-[#1877f2]"
-              onClick={() =>
-                dispatch(acceptFollowRequest({ requestId: rel.requestId }))
-              }
+              onClick={async () => {
+                if (!authToken) return;
+                try {
+                  await apiRequest(`/api/social/follow-requests/${rel.requestId}`, {
+                    method: "PATCH",
+                    headers: { Authorization: `Bearer ${authToken}` },
+                    body: JSON.stringify({ action: "accept" }),
+                  });
+                  dispatch(acceptFollowRequest({ requestId: rel.requestId }));
+                } catch {
+                  // keep current state on error
+                }
+              }}
             >
               Confirm
             </Button>
@@ -161,9 +173,19 @@ function SuggestedUserRow({
               size="sm"
               variant="secondary"
               className="h-7 rounded-md px-2.5 text-[11px] font-semibold"
-              onClick={() =>
-                dispatch(rejectFollowRequest({ requestId: rel.requestId }))
-              }
+              onClick={async () => {
+                if (!authToken) return;
+                try {
+                  await apiRequest(`/api/social/follow-requests/${rel.requestId}`, {
+                    method: "PATCH",
+                    headers: { Authorization: `Bearer ${authToken}` },
+                    body: JSON.stringify({ action: "reject" }),
+                  });
+                  dispatch(rejectFollowRequest({ requestId: rel.requestId }));
+                } catch {
+                  // keep current state on error
+                }
+              }}
             >
               Delete
             </Button>
@@ -173,14 +195,23 @@ function SuggestedUserRow({
             type="button"
             variant="ghost"
             className={followActionMutedClass}
-            onClick={() =>
-              dispatch(
-                cancelFollowRequest({
-                  fromUserId: authUser.id,
-                  toUserId: u.id,
-                }),
-              )
-            }
+            onClick={async () => {
+              if (!authToken) return;
+              try {
+                await apiRequest(`/api/social/follow/${u.id}`, {
+                  method: "DELETE",
+                  headers: { Authorization: `Bearer ${authToken}` },
+                });
+                dispatch(
+                  cancelFollowRequest({
+                    fromUserId: authUser.id,
+                    toUserId: u.id,
+                  }),
+                );
+              } catch {
+                // keep current state on error
+              }
+            }}
           >
             Requested
           </Button>
@@ -189,19 +220,28 @@ function SuggestedUserRow({
             type="button"
             variant="ghost"
             className={followActionMutedClass}
-            onClick={() =>
-              dispatch(
-                rel.mutual
-                  ? removeFriendship({
-                      userAId: authUser.id,
-                      userBId: u.id,
-                    })
-                  : unfollow({
-                      followerId: authUser.id,
-                      followingId: u.id,
-                    }),
-              )
-            }
+            onClick={async () => {
+              if (!authToken) return;
+              try {
+                await apiRequest(`/api/social/follow/${u.id}`, {
+                  method: "DELETE",
+                  headers: { Authorization: `Bearer ${authToken}` },
+                });
+                dispatch(
+                  rel.mutual
+                    ? removeFriendship({
+                        userAId: authUser.id,
+                        userBId: u.id,
+                      })
+                    : unfollow({
+                        followerId: authUser.id,
+                        followingId: u.id,
+                      }),
+                );
+              } catch {
+                // keep current state on error
+              }
+            }}
           >
             {rel.mutual ? "Friends" : "Following"}
           </Button>
@@ -210,14 +250,23 @@ function SuggestedUserRow({
             type="button"
             variant="ghost"
             className={followActionBlueClass}
-            onClick={() => {
-              dispatch(
-                sendFollowRequest({
-                  fromUserId: authUser.id,
-                  toUserId: u.id,
-                }),
-              );
-              dispatch(setActiveModal("followRequestSent"));
+            onClick={async () => {
+              if (!authToken) return;
+              try {
+                await apiRequest(`/api/social/follow/${u.id}`, {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${authToken}` },
+                });
+                dispatch(
+                  sendFollowRequest({
+                    fromUserId: authUser.id,
+                    toUserId: u.id,
+                  }),
+                );
+                dispatch(setActiveModal("followRequestSent"));
+              } catch {
+                // keep current state on error
+              }
             }}
           >
             Follow
@@ -674,6 +723,7 @@ function MainLayout() {
                         key={u.id}
                         user={u}
                         authUser={authUser}
+                        authToken={authToken}
                         social={social}
                       />
                     ))
@@ -782,9 +832,19 @@ function MainLayout() {
                         type="button"
                         size="sm"
                         className="h-8 rounded-lg bg-[#0095f6] px-3 text-xs font-semibold text-white hover:bg-[#1877f2]"
-                        onClick={() =>
-                          dispatch(acceptFollowRequest({ requestId: req.id }))
-                        }
+                        onClick={async () => {
+                          if (!authToken) return;
+                          try {
+                            await apiRequest(`/api/social/follow-requests/${req.id}`, {
+                              method: "PATCH",
+                              headers: { Authorization: `Bearer ${authToken}` },
+                              body: JSON.stringify({ action: "accept" }),
+                            });
+                            dispatch(acceptFollowRequest({ requestId: req.id }));
+                          } catch {
+                            // keep current state on error
+                          }
+                        }}
                       >
                         Confirm
                       </Button>
@@ -793,9 +853,19 @@ function MainLayout() {
                         size="sm"
                         variant="secondary"
                         className="h-8 rounded-lg px-3 text-xs font-semibold"
-                        onClick={() =>
-                          dispatch(rejectFollowRequest({ requestId: req.id }))
-                        }
+                        onClick={async () => {
+                          if (!authToken) return;
+                          try {
+                            await apiRequest(`/api/social/follow-requests/${req.id}`, {
+                              method: "PATCH",
+                              headers: { Authorization: `Bearer ${authToken}` },
+                              body: JSON.stringify({ action: "reject" }),
+                            });
+                            dispatch(rejectFollowRequest({ requestId: req.id }));
+                          } catch {
+                            // keep current state on error
+                          }
+                        }}
                       >
                         Delete
                       </Button>

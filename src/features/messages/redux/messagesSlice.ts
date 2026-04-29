@@ -214,11 +214,14 @@ const messagesSlice = createSlice({
         threadId: string;
         senderId: string;
         text: string;
+        clientTempId?: string;
       }>,
     ) {
       const t = state.threadsById[action.payload.threadId];
       if (!t) return;
-      const clientTempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const clientTempId =
+        action.payload.clientTempId ??
+        `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const id = `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       state.messagesById[id] = {
         id,

@@ -369,27 +369,54 @@ function ProfilePage() {
     }
   }
 
-  function handlePrimaryFollowAction() {
+  async function handlePrimaryFollowAction() {
     if (!authUser || !profileUser || isOwnProfile) return;
     if (followStatus === "none") {
-      dispatch(
-        sendFollowRequest({
-          fromUserId: authUser.id,
-          toUserId: profileUser.id,
-        }),
-      );
-      dispatch(setActiveModal("followRequestSent"));
+      if (!authToken) return;
+      try {
+        await apiRequest(`/api/social/follow/${profileUser.id}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        dispatch(
+          sendFollowRequest({
+            fromUserId: authUser.id,
+            toUserId: profileUser.id,
+          }),
+        );
+        dispatch(setActiveModal("followRequestSent"));
+      } catch {
+        // keep current state on error
+      }
     } else if (followStatus === "requested") {
-      dispatch(
-        cancelFollowRequest({
-          fromUserId: authUser.id,
-          toUserId: profileUser.id,
-        }),
-      );
+      if (!authToken) return;
+      try {
+        await apiRequest(`/api/social/follow/${profileUser.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        dispatch(
+          cancelFollowRequest({
+            fromUserId: authUser.id,
+            toUserId: profileUser.id,
+          }),
+        );
+      } catch {
+        // keep current state on error
+      }
     } else {
-      dispatch(
-        unfollow({ followerId: authUser.id, followingId: profileUser.id }),
-      );
+      if (!authToken) return;
+      try {
+        await apiRequest(`/api/social/follow/${profileUser.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        dispatch(
+          unfollow({ followerId: authUser.id, followingId: profileUser.id }),
+        );
+      } catch {
+        // keep current state on error
+      }
     }
   }
 
@@ -470,7 +497,7 @@ function ProfilePage() {
                     variant="secondary"
                     size="sm"
                     className={profileBtnSecondary}
-                    onClick={handlePrimaryFollowAction}
+                    onClick={() => void handlePrimaryFollowAction()}
                   >
                     {followButtonLabel}
                   </Button>

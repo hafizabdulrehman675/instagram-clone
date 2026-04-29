@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Heart, Send, UserPlus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { setActiveModal } from "@/features/ui/redux/uiSlice";
+import { apiRequest } from "@/lib/api";
 
 type NotificationItem = {
   id: string;
@@ -12,6 +13,20 @@ type NotificationItem = {
   userAvatarUrl: string;
   text: string;
   type: "incomingRequest" | "outgoingRequest" | "followingYou";
+  isRead?: boolean;
+  createdAt?: string;
+};
+
+type BackendNotification = {
+  id: string | number;
+  type: "like" | "comment" | "follow" | "follow_request";
+  isRead: boolean;
+  createdAt: string;
+  sender: {
+    id: string | number;
+    username: string;
+    avatarUrl: string | null;
+  };
 };
 
 function NotificationIcon({ type }: { type: NotificationItem["type"] }) {
@@ -27,6 +42,10 @@ function NotificationsPage() {
   const authUser = useAppSelector((s) => s.auth.user);
   const social = useAppSelector((s) => s.social);
   const usersById = useAppSelector((s) => s.users.usersById);
+  const authToken = useAppSelector((s) => s.auth.token);
+  const [backendNotifications, setBackendNotifications] = useState<
+    NotificationItem[]
+  >([]);
 
   const followActivityCount = useMemo(() => {
     if (!authUser) return 0;
@@ -36,6 +55,7 @@ function NotificationsPage() {
   }, [authUser, social.requestsById]);
 
   const notifications = useMemo((): NotificationItem[] => {
+    if (backendNotifications.length > 0) return backendNotifications;
     if (!authUser) return [];
 
     // Keep one "best" notification per user to avoid stale/conflicting entries.
@@ -97,11 +117,103 @@ function NotificationsPage() {
     );
   }, [authUser, social.followingByUserId, social.requestsById, usersById]);
 
+  useEffect(() => {
+    async function loadNotifications() {
+      if (!authToken) return;
+
+      try {
+        const response = await apiRequest<{
+          data: { notifications: BackendNotification[] };
+        }>("/api/notifications", {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+
+        const mapped: NotificationItem[] = (response.data.notifications || []).map(
+          (n) => {
+            const typeMap: Record<BackendNotification["type"], NotificationItem["type"]> =
+              {
+                follow_request: "incomingRequest",
+                follow: "followingYou",
+                like: "followingYou",
+                comment: "outgoingRequest",
+              };
+
+            const textMap: Record<BackendNotification["type"], string> = {
+              follow_request: "requested to follow you.",
+              follow: "is following you.",
+              like: "liked your post.",
+              comment: "commented on your post.",
+            };
+
+            return {
+              id: String(n.id),
+              username: n.sender?.username ?? "unknown_user",
+              userAvatarUrl:
+                n.sender?.avatarUrl ?? "https://i.pravatar.cc/100?u=unknown",
+              text: textMap[n.type],
+              type: typeMap[n.type],
+              isRead: n.isRead,
+              createdAt: n.createdAt,
+            };
+          },
+        );
+
+        setBackendNotifications(mapped);
+      } catch {
+        // Keep fallback local activity notifications if backend fetch fails.
+      }
+    }
+
+    loadNotifications();
+  }, [authToken]);
+
+  async function handleNotificationClick(itemId: string, isRead?: boolean) {
+    if (!authToken || isRead) return;
+
+    try {
+      await apiRequest(`/api/notifications/${itemId}/read`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setBackendNotifications((prev) =>
+        prev.map((n) => (n.id === itemId ? { ...n, isRead: true } : n)),
+      );
+    } catch {
+      // Ignore mark-read failure and keep UI state.
+    }
+  }
+
+  async function handleMarkAllRead() {
+    if (!authToken || backendNotifications.length === 0) return;
+    try {
+      await apiRequest("/api/notifications/read-all", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setBackendNotifications((prev) =>
+        prev.map((n) => ({ ...n, isRead: true })),
+      );
+    } catch {
+      // Keep current state on error.
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-[630px] space-y-4 px-1 py-4">
-      <h1 className="text-xl font-semibold" style={{ color: "black" }}>
-        Notifications
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold" style={{ color: "black" }}>
+          Notifications
+        </h1>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => void handleMarkAllRead()}
+          disabled={backendNotifications.length === 0}
+        >
+          Mark all read
+        </Button>
+      </div>
 
       <div className="flex items-center justify-between rounded-md border border-zinc-200 bg-white px-4 py-3">
         <div>
@@ -151,6 +263,7 @@ function NotificationsPage() {
               <Link
                 to={`/profile/${encodeURIComponent(item.username)}`}
                 className="flex min-w-0 flex-1 items-center gap-3"
+                onClick={() => void handleNotificationClick(item.id, item.isRead)}
               >
                 <img
                   src={item.userAvatarUrl}
@@ -163,7 +276,9 @@ function NotificationsPage() {
                 </p>
               </Link>
 
-              <span className="ml-auto text-xs text-zinc-500">now</span>
+              <span className="ml-auto text-xs text-zinc-500">
+                {item.isRead ? "read" : "now"}
+              </span>
             </div>
           ))
         )}
