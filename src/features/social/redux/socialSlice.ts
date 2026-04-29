@@ -41,6 +41,10 @@ const socialSlice = createSlice({
   name: "social",
   initialState,
   reducers: {
+    replaceSocialState(state, action: PayloadAction<SocialState>) {
+      state.followingByUserId = action.payload.followingByUserId;
+      state.requestsById = action.payload.requestsById;
+    },
     sendFollowRequest(
       state,
       action: PayloadAction<{ fromUserId: string; toUserId: string }>,
@@ -87,13 +91,15 @@ const socialSlice = createSlice({
       state,
       action: PayloadAction<{ fromUserId: string; toUserId: string }>,
     ) {
-      const id = requestPairId(
-        action.payload.fromUserId,
-        action.payload.toUserId,
-      );
-      const req = state.requestsById[id];
-      if (req?.status === "pending") {
-        delete state.requestsById[id];
+      for (const [id, req] of Object.entries(state.requestsById)) {
+        if (
+          req.status === "pending" &&
+          req.fromUserId === action.payload.fromUserId &&
+          req.toUserId === action.payload.toUserId
+        ) {
+          delete state.requestsById[id];
+          break;
+        }
       }
     },
 
@@ -130,6 +136,7 @@ const socialSlice = createSlice({
 });
 
 export const {
+  replaceSocialState,
   sendFollowRequest,
   acceptFollowRequest,
   rejectFollowRequest,

@@ -38,6 +38,7 @@ import {
   cancelFollowRequest,
   removeFriendship,
   rejectFollowRequest,
+  replaceSocialState,
   sendFollowRequest,
   unfollow,
 } from "@/features/social/redux/socialSlice";
@@ -54,10 +55,6 @@ const NAV_ITEMS = [
   { label: "Create", icon: PlusSquare, to: "/create" },
 ];
 
-function followRequestId(fromUserId: string, toUserId: string) {
-  return `fr_${fromUserId}_${toUserId}`;
-}
-
 type SuggestedRelation =
   | { kind: "incoming"; requestId: string }
   | { kind: "outgoing" }
@@ -69,14 +66,24 @@ function getSuggestedRelation(
   targetId: string,
   social: SocialState,
 ): SuggestedRelation {
-  const incomingId = followRequestId(targetId, authId);
-  if (social.requestsById[incomingId]?.status === "pending") {
-    return { kind: "incoming", requestId: incomingId };
+  for (const req of Object.values(social.requestsById)) {
+    if (
+      req.status === "pending" &&
+      req.fromUserId === targetId &&
+      req.toUserId === authId
+    ) {
+      return { kind: "incoming", requestId: req.id };
+    }
   }
 
-  const outgoingId = followRequestId(authId, targetId);
-  if (social.requestsById[outgoingId]?.status === "pending") {
-    return { kind: "outgoing" };
+  for (const req of Object.values(social.requestsById)) {
+    if (
+      req.status === "pending" &&
+      req.fromUserId === authId &&
+      req.toUserId === targetId
+    ) {
+      return { kind: "outgoing" };
+    }
   }
 
   const myFollowing = social.followingByUserId[authId] ?? [];
@@ -403,6 +410,24 @@ function MainLayout() {
     }
 
     loadUsersFromBackend();
+  }, [authUser, authToken, dispatch]);
+
+  useEffect(() => {
+    async function loadSocialStateFromBackend() {
+      if (!authUser || !authToken) return;
+      try {
+        const response = await apiRequest<{
+          data: SocialState;
+        }>("/api/social/me", {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        dispatch(replaceSocialState(response.data));
+      } catch {
+        // Keep current social state when backend sync fails.
+      }
+    }
+
+    loadSocialStateFromBackend();
   }, [authUser, authToken, dispatch]);
 
   /*
