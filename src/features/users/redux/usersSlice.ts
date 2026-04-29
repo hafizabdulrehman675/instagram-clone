@@ -1,17 +1,25 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { UserRecord, UsersState } from "@/features/users/types";
 
-const STORAGE_KEY = "ig_clone_users_v1";
+/*
+  Mock persistence reference (disabled intentionally):
+  ---------------------------------------------------
+  const STORAGE_KEY = "ig_clone_users_v1";
 
-function loadUsers(): UsersState | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as UsersState;
-  } catch {
-    return null;
+  function loadUsers(): UsersState | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as UsersState;
+    } catch {
+      return null;
+    }
   }
-}
+
+  function persistUsers(state: UsersState) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+*/
 
 function seedUsers(): UsersState {
   const u1: UserRecord = {
@@ -43,11 +51,7 @@ function seedUsers(): UsersState {
   };
 }
 
-function persistUsers(state: UsersState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-const initialState: UsersState = loadUsers() ?? seedUsers();
+const initialState: UsersState = seedUsers();
 
 const usersSlice = createSlice({
   name: "users",
@@ -60,16 +64,13 @@ const usersSlice = createSlice({
       if (!state.allUserIds.includes(user.id)) {
         state.allUserIds.push(user.id);
       }
-
-      persistUsers(state);
     },
 
-    // For demo: helpful to reset between tests
+    // Keeps previous reducer API, but reset now uses in-memory seed only.
     resetDemoUsers(state) {
       const seeded = seedUsers();
       state.usersById = seeded.usersById;
       state.allUserIds = seeded.allUserIds;
-      persistUsers(state);
     },
 
     updateUserProfile(
@@ -90,7 +91,6 @@ const usersSlice = createSlice({
       if (action.payload.newPassword) {
         u.password = action.payload.newPassword;
       }
-      persistUsers(state);
     },
   },
 });

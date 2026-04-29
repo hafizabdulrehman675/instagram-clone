@@ -1,16 +1,28 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { SocialState } from "@/features/social/types";
 
-const STORAGE_KEY = "ig_clone_social_v2";
+/*
+  Mock persistence reference (disabled intentionally):
+  ---------------------------------------------------
+  const STORAGE_KEY = "ig_clone_social_v2";
 
-function loadSocial(): SocialState | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as SocialState;
-  } catch {
-    return null;
+  function loadSocial(): SocialState | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as SocialState;
+    } catch {
+      return null;
+    }
   }
+
+  function persistSocial(state: SocialState) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+*/
+
+function requestPairId(fromUserId: string, toUserId: string) {
+  return `fr_${fromUserId}_${toUserId}`;
 }
 
 function seedSocial(): SocialState {
@@ -23,15 +35,7 @@ function seedSocial(): SocialState {
   };
 }
 
-function persistSocial(state: SocialState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-function requestPairId(fromUserId: string, toUserId: string) {
-  return `fr_${fromUserId}_${toUserId}`;
-}
-
-const initialState: SocialState = loadSocial() ?? seedSocial();
+const initialState: SocialState = seedSocial();
 
 const socialSlice = createSlice({
   name: "social",
@@ -57,7 +61,6 @@ const socialSlice = createSlice({
         toUserId,
         status: "pending",
       };
-      persistSocial(state);
     },
 
     acceptFollowRequest(state, action: PayloadAction<{ requestId: string }>) {
@@ -72,14 +75,12 @@ const socialSlice = createSlice({
       }
 
       delete state.requestsById[action.payload.requestId];
-      persistSocial(state);
     },
 
     rejectFollowRequest(state, action: PayloadAction<{ requestId: string }>) {
       const req = state.requestsById[action.payload.requestId];
       if (!req || req.status !== "pending") return;
       delete state.requestsById[action.payload.requestId];
-      persistSocial(state);
     },
 
     cancelFollowRequest(
@@ -93,7 +94,6 @@ const socialSlice = createSlice({
       const req = state.requestsById[id];
       if (req?.status === "pending") {
         delete state.requestsById[id];
-        persistSocial(state);
       }
     },
 
@@ -106,7 +106,6 @@ const socialSlice = createSlice({
       state.followingByUserId[action.payload.followerId] = arr.filter(
         (id) => id !== action.payload.followingId,
       );
-      persistSocial(state);
     },
 
     removeFriendship(
@@ -119,14 +118,13 @@ const socialSlice = createSlice({
 
       state.followingByUserId[userAId] = aFollowing.filter((id) => id !== userBId);
       state.followingByUserId[userBId] = bFollowing.filter((id) => id !== userAId);
-      persistSocial(state);
     },
 
+    // Keeps previous reducer API, now resets in-memory state only.
     resetDemoSocial(state) {
       const seeded = seedSocial();
       state.followingByUserId = seeded.followingByUserId;
       state.requestsById = seeded.requestsById;
-      persistSocial(state);
     },
   },
 });

@@ -6,6 +6,18 @@ type PostsState = {
   feedPostIds: string[];
 };
 
+function normalizePosts(posts: FeedPost[]): PostsState {
+  const postsById: Record<string, FeedPost> = {};
+  const feedPostIds: string[] = [];
+
+  for (const post of posts) {
+    postsById[post.id] = post;
+    feedPostIds.push(post.id);
+  }
+
+  return { postsById, feedPostIds };
+}
+
 const p1Comments: PostComment[] = [
   {
     id: "p1c1",
@@ -22,30 +34,6 @@ const p1Comments: PostComment[] = [
     avatarUrl: "https://i.pravatar.cc/100?img=5",
     text: "Clifton beach, right before sunset.",
     postedAtLabel: "1h",
-  },
-  {
-    id: "p1c3",
-    parentId: "p1c2",
-    username: "emma_w",
-    avatarUrl: "https://i.pravatar.cc/100?u=emma",
-    text: "Need to go there soon.",
-    postedAtLabel: "45m",
-  },
-  {
-    id: "p1c4",
-    parentId: null,
-    username: "zain.dev",
-    avatarUrl: "https://i.pravatar.cc/100?u=zain",
-    text: "Colors are perfect.",
-    postedAtLabel: "30m",
-  },
-  {
-    id: "p1c5",
-    parentId: "p1c4",
-    username: "sara",
-    avatarUrl: "https://i.pravatar.cc/100?u=sara",
-    text: "Agreed.",
-    postedAtLabel: "20m",
   },
 ];
 
@@ -81,18 +69,6 @@ const initialPosts: FeedPost[] = [
     isSaved: false,
   },
 ];
-
-function normalizePosts(posts: FeedPost[]): PostsState {
-  const postsById: Record<string, FeedPost> = {};
-  const feedPostIds: string[] = [];
-
-  for (const post of posts) {
-    postsById[post.id] = post;
-    feedPostIds.push(post.id);
-  }
-
-  return { postsById, feedPostIds };
-}
 
 const initialState: PostsState = normalizePosts(initialPosts);
 

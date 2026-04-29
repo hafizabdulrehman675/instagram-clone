@@ -4,11 +4,11 @@ import * as Yup from "yup";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ApiError, apiRequest } from "@/lib/api";
 import { saveSession } from "@/lib/session";
-import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { useAppDispatch } from "@/app/hooks";
 import { loginSuccess } from "@/features/auth/redux/authSlice";
 import type { AuthUser } from "@/features/auth/types";
-import type { UserRecord } from "@/features/users/types";
 
 // ── Yup validation schema ──────────────────────────────────────────────────
 const LoginSchema = Yup.object({
@@ -20,43 +20,59 @@ const LoginSchema = Yup.object({
 function LoginPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const usersById = useAppSelector((s) => s.users.usersById);
 
   const formik = useFormik({
     initialValues: { identity: "", password: "" },
     validationSchema: LoginSchema,
-    onSubmit: (values, { setFieldError, setSubmitting }) => {
-      const existingUsers: UserRecord[] = Object.values(usersById);
+    onSubmit: async (values, { setFieldError, setSubmitting }) => {
+      try {
+        const identity = values.identity.trim();
+        let email = identity;
 
-      const foundUser = existingUsers.find(
-        (u) =>
-          u.username === values.identity.trim() ||
-          u.email === values.identity.trim(),
-      );
+        if (!identity.includes("@")) {
+          const profile = await apiRequest<{
+            data: { user: { email: string } };
+          }>(`/api/users/${encodeURIComponent(identity)}`);
+          email = profile.data.user.email;
+        }
 
-      if (!foundUser) {
-        setFieldError("identity", "User not found. Please sign up.");
+        const response = await apiRequest<{
+          token: string;
+          data: { user: Omit<AuthUser, "id"> & { id: number | string } };
+        }>("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            email,
+            password: values.password,
+          }),
+        });
+
+        const authUser: AuthUser = {
+          id: String(response.data.user.id),
+          username: response.data.user.username,
+          fullName: response.data.user.fullName,
+          email: response.data.user.email,
+          avatarUrl: response.data.user.avatarUrl ?? null,
+        };
+
+        dispatch(loginSuccess({ user: authUser, token: response.token }));
+        saveSession(authUser.id, response.token);
+        navigate("/");
+      } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.statusCode === 404) {
+            setFieldError("identity", "User not found. Please sign up.");
+          } else if (error.statusCode === 401) {
+            setFieldError("password", "Invalid email or password.");
+          } else {
+            setFieldError("identity", "Unable to login right now.");
+          }
+        } else {
+          setFieldError("identity", "Unable to login right now.");
+        }
+      } finally {
         setSubmitting(false);
-        return;
       }
-
-      if (foundUser.password !== values.password) {
-        setFieldError("password", "Invalid password. Try again.");
-        setSubmitting(false);
-        return;
-      }
-
-      const authUser: AuthUser = {
-        id: foundUser.id,
-        username: foundUser.username,
-        fullName: foundUser.fullName,
-        email: foundUser.email,
-        avatarUrl: foundUser.avatarUrl,
-      };
-
-      dispatch(loginSuccess(authUser));
-      saveSession(foundUser.id);
-      navigate("/");
     },
   });
 

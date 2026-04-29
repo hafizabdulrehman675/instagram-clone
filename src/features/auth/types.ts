@@ -3,10 +3,11 @@ export type AuthUser = {
   username: string;
   fullName: string;
   email: string;
-  avatarUrl: string;
+  avatarUrl: string | null;
 };
 
 export type AuthState = {
   user: AuthUser | null;
+  token: string | null;
   isAuthenticated: boolean;
 };

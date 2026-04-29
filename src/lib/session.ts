@@ -2,10 +2,11 @@ const SESSION_KEY = "ig_clone_session_v1";
 
 export type SessionData = {
   userId: string;
+  token: string;
 };
 
-export function saveSession(userId: string): void {
-  const data: SessionData = { userId };
+export function saveSession(userId: string, token: string): void {
+  const data: SessionData = { userId, token };
   localStorage.setItem(SESSION_KEY, JSON.stringify(data));
 }
 

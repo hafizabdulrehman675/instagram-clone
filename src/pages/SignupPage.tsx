@@ -12,9 +12,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { registerUser } from "@/features/users/redux/usersSlice";
-import type { UserRecord } from "@/features/users/types";
+import { useAppDispatch } from "@/app/hooks";
+import { ApiError, apiRequest } from "@/lib/api";
+import { saveSession } from "@/lib/session";
+import { loginSuccess } from "@/features/auth/redux/authSlice";
+import type { AuthUser } from "@/features/auth/types";
 
 // ── Yup validation schema ──────────────────────────────────────────────────
 const SignupSchema = Yup.object({
@@ -79,7 +81,6 @@ function PhoneMockup() {
 function SignupPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const usersById = useAppSelector((s) => s.users.usersById);
 
   const formik = useFormik({
     initialValues: {
@@ -89,34 +90,48 @@ function SignupPage() {
       password: "",
     },
     validationSchema: SignupSchema,
-    onSubmit: (values, { setFieldError, setSubmitting }) => {
-      const existingUsers: UserRecord[] = Object.values(usersById);
+    onSubmit: async (values, { setFieldError, setSubmitting }) => {
+      try {
+        const response = await apiRequest<{
+          token: string;
+          data: { user: Omit<AuthUser, "id"> & { id: number | string } };
+        }>("/api/auth/register", {
+          method: "POST",
+          body: JSON.stringify({
+            username: values.username.trim(),
+            fullName: values.fullName.trim(),
+            email: values.email.trim(),
+            password: values.password,
+          }),
+        });
 
-      if (existingUsers.some((u) => u.username === values.username.trim())) {
-        setFieldError("username", "Username already taken. Try another.");
+        const authUser: AuthUser = {
+          id: String(response.data.user.id),
+          username: response.data.user.username,
+          fullName: response.data.user.fullName,
+          email: response.data.user.email,
+          avatarUrl: response.data.user.avatarUrl ?? null,
+        };
+
+        dispatch(loginSuccess({ user: authUser, token: response.token }));
+        saveSession(authUser.id, response.token);
+        navigate("/");
+      } catch (error) {
+        if (error instanceof ApiError) {
+          const message = error.message.toLowerCase();
+          if (message.includes("username")) {
+            setFieldError("username", error.message);
+          } else if (message.includes("email")) {
+            setFieldError("email", error.message);
+          } else {
+            setFieldError("email", "Unable to signup right now.");
+          }
+        } else {
+          setFieldError("email", "Unable to signup right now.");
+        }
+      } finally {
         setSubmitting(false);
-        return;
       }
-
-      if (existingUsers.some((u) => u.email === values.email.trim())) {
-        setFieldError("email", "Email already registered. Try another.");
-        setSubmitting(false);
-        return;
-      }
-
-      const newUserId = `u_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
-      const newUserRecord: UserRecord = {
-        id: newUserId,
-        username: values.username.trim(),
-        fullName: values.fullName.trim(),
-        email: values.email.trim(),
-        avatarUrl: `https://i.pravatar.cc/100?u=${encodeURIComponent(values.username.trim())}`,
-        password: values.password,
-      };
-
-      dispatch(registerUser(newUserRecord));
-      navigate("/login");
     },
   });
 

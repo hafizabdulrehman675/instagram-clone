@@ -6,21 +6,25 @@ import type {
   ThreadPeer,
 } from "@/features/messages/types";
 
-const STORAGE_KEY = "ig_clone_messages_v2";
+/*
+  Mock persistence reference (disabled intentionally):
+  ---------------------------------------------------
+  const STORAGE_KEY = "ig_clone_messages_v2";
 
-function loadMessages(): MessagesState | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as MessagesState;
-  } catch {
-    return null;
+  function loadMessages(): MessagesState | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as MessagesState;
+    } catch {
+      return null;
+    }
   }
-}
 
-function persistMessages(state: MessagesState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
+  function persistMessages(state: MessagesState) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+*/
 
 function upsertThread(state: MessagesState, thread: ThreadEntity) {
   const existing = state.threadsById[thread.id];
@@ -89,7 +93,7 @@ function seedMessages(): MessagesState {
   };
 }
 
-const initialState: MessagesState = loadMessages() ?? seedMessages();
+const initialState: MessagesState = seedMessages();
 
 const messagesSlice = createSlice({
   name: "messages",
@@ -110,19 +114,16 @@ const messagesSlice = createSlice({
         lastReadMessageIdByUserId: { [action.payload.myUserId]: null },
       };
       state.threadIds.unshift(id);
-      persistMessages(state);
     },
 
     hydrateMessagesState(state, action: PayloadAction<MessagesState>) {
       state.threadsById = action.payload.threadsById;
       state.threadIds = action.payload.threadIds;
       state.messagesById = action.payload.messagesById;
-      persistMessages(state);
     },
 
     upsertThreadFromServer(state, action: PayloadAction<ThreadEntity>) {
       upsertThread(state, action.payload);
-      persistMessages(state);
     },
 
     upsertMessagesFromServer(state, action: PayloadAction<MessageEntity[]>) {
@@ -138,7 +139,6 @@ const messagesSlice = createSlice({
           thread.messageIds.push(msg.id);
         }
       }
-      persistMessages(state);
     },
 
     messageAcked(
@@ -177,7 +177,6 @@ const messagesSlice = createSlice({
         }
       }
 
-      persistMessages(state);
     },
 
     readCursorUpdated(
@@ -196,7 +195,6 @@ const messagesSlice = createSlice({
       thread.lastReadMessageIdByUserId[action.payload.userId] =
         action.payload.lastReadMessageId;
       thread.unreadCountByUserId[action.payload.userId] = 0;
-      persistMessages(state);
     },
 
     threadRead(state, action: PayloadAction<{ threadId: string; userId: string }>) {
@@ -208,7 +206,6 @@ const messagesSlice = createSlice({
         t.lastReadMessageIdByUserId = {};
       }
       t.lastReadMessageIdByUserId[action.payload.userId] = lastMessageId;
-      persistMessages(state);
     },
 
     messageSentOptimistic(
@@ -238,7 +235,6 @@ const messagesSlice = createSlice({
       // Keep sender unread count reset to avoid stale badge carryover.
       t.unreadCountByUserId[action.payload.senderId] = 0;
       state.threadIds = [t.id, ...state.threadIds.filter((x) => x !== t.id)];
-      persistMessages(state);
     },
 
     messageReceived(
@@ -265,7 +261,6 @@ const messagesSlice = createSlice({
       const prev = t.unreadCountByUserId[action.payload.recipientUserId] ?? 0;
       t.unreadCountByUserId[action.payload.recipientUserId] = prev + 1;
       state.threadIds = [t.id, ...state.threadIds.filter((x) => x !== t.id)];
-      persistMessages(state);
     },
 
     toggleMessageReaction(
@@ -275,7 +270,6 @@ const messagesSlice = createSlice({
       const msg = state.messagesById[action.payload.messageId];
       if (!msg) return;
       msg.reacted = msg.reacted === action.payload.emoji ? undefined : action.payload.emoji;
-      persistMessages(state);
     },
   },
 });
