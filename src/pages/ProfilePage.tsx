@@ -20,7 +20,9 @@ import {
 } from "@/components/ui/dialog";
 import type { FeedPost } from "@/features/posts/types";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
+import { apiRequest } from "@/lib/api";
 import { setActiveModal } from "@/features/ui/redux/uiSlice";
+import { removePost } from "@/features/posts/redux/postsSlice";
 import {
   sendFollowRequest,
   cancelFollowRequest,
@@ -75,9 +77,15 @@ function PostThumb({ post, onClick }: { post: FeedPost; onClick: () => void }) {
 /* ─── Post detail dialog ─────────────────────────────────────────── */
 function PostDialog({
   post,
+  canDelete,
+  isDeleting,
+  onDelete,
   onClose,
 }: {
   post: FeedPost | null;
+  canDelete: boolean;
+  isDeleting: boolean;
+  onDelete: (postId: string) => Promise<void>;
   onClose: () => void;
 }) {
   if (!post) return null;
@@ -94,9 +102,23 @@ function PostDialog({
           </div>
           <div className="flex flex-1 flex-col p-5">
             <DialogHeader className="mb-3">
-              <DialogTitle className="text-[14px] font-semibold">
-                {post.username}
-              </DialogTitle>
+              <div className="flex items-center justify-between gap-3">
+                <DialogTitle className="text-[14px] font-semibold">
+                  {post.username}
+                </DialogTitle>
+                {canDelete ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto px-2 py-1 text-xs text-red-600 hover:text-red-600"
+                    disabled={isDeleting}
+                    onClick={() => void onDelete(post.id)}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </Button>
+                ) : null}
+              </div>
             </DialogHeader>
             <p className="text-[13.5px] leading-snug text-zinc-800 flex-1">
               <span className="font-semibold mr-1.5">{post.username}</span>
@@ -169,6 +191,7 @@ function ProfilePage() {
   const usersById = useAppSelector((s) => s.users.usersById);
   const social = useAppSelector((s) => s.social);
   const dispatch = useAppDispatch();
+  const authToken = useAppSelector((s) => s.auth.token);
 
   const profileUser = useMemo(() => {
     if (!routeUsername) return authUser ?? null;
@@ -200,6 +223,7 @@ function ProfilePage() {
 
   const [tab, setTab] = useState<ProfileTab>("posts");
   const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
+  const [isDeletingPost, setIsDeletingPost] = useState(false);
 
   useEffect(() => {
     setTab("posts");
@@ -269,6 +293,80 @@ function ProfilePage() {
 
   function openCreatePostModal() {
     dispatch(setActiveModal("createPost"));
+  }
+
+  async function handleDeletePost(postId: string) {
+    if (!authToken || isDeletingPost) return;
+    setIsDeletingPost(true);
+    try {
+      await apiRequest(`/api/posts/${postId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      dispatch(removePost({ postId }));
+      setSelectedPost(null);
+    } catch {
+      // Keep current UI state when delete fails.
+    } finally {
+      setIsDeletingPost(false);
+    }
+  }
+
+  async function handleOpenPost(post: FeedPost) {
+    try {
+      const response = await apiRequest<{
+        data: {
+          post: {
+            id: string | number;
+            authorId: string | number;
+            username: string;
+            avatarUrl: string | null;
+            location: string | null;
+            imageUrl: string;
+            likesCount: number;
+            caption: string;
+            commentsCount: number;
+            comments: Array<{
+              id: string | number;
+              parentId: string | number | null;
+              username: string;
+              avatarUrl: string | null;
+              text: string;
+            }>;
+            isLiked: boolean;
+            isSaved: boolean;
+          };
+        };
+      }>(`/api/posts/${post.id}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+      });
+
+      const fullPost = response.data.post;
+      setSelectedPost({
+        id: String(fullPost.id),
+        authorId: String(fullPost.authorId),
+        username: fullPost.username,
+        avatarUrl: fullPost.avatarUrl ?? "https://i.pravatar.cc/100?u=fallback",
+        location: fullPost.location ?? "",
+        imageUrl: fullPost.imageUrl,
+        likesCount: fullPost.likesCount,
+        caption: fullPost.caption ?? "",
+        commentsCount: fullPost.commentsCount,
+        comments: (fullPost.comments || []).map((c) => ({
+          id: String(c.id),
+          parentId: c.parentId ? String(c.parentId) : null,
+          username: c.username,
+          avatarUrl: c.avatarUrl ?? "https://i.pravatar.cc/100?u=fallback",
+          text: c.text,
+          postedAtLabel: "JUST NOW",
+        })),
+        postedAtLabel: "JUST NOW",
+        isLiked: fullPost.isLiked,
+        isSaved: fullPost.isSaved,
+      });
+    } catch {
+      setSelectedPost(post);
+    }
   }
 
   function handlePrimaryFollowAction() {
@@ -533,7 +631,7 @@ function ProfilePage() {
                   <PostThumb
                     key={post.id}
                     post={post}
-                    onClick={() => setSelectedPost(post)}
+                    onClick={() => void handleOpenPost(post)}
                   />
                 ))}
               </div>
@@ -544,7 +642,13 @@ function ProfilePage() {
         <div className="h-16 md:h-6" />
       </div>
 
-      <PostDialog post={selectedPost} onClose={() => setSelectedPost(null)} />
+      <PostDialog
+        post={selectedPost}
+        canDelete={isOwnProfile}
+        isDeleting={isDeletingPost}
+        onDelete={handleDeletePost}
+        onClose={() => setSelectedPost(null)}
+      />
     </>
   );
 }

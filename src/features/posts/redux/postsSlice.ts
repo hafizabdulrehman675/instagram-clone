@@ -76,10 +76,41 @@ const postsSlice = createSlice({
   name: "posts",
   initialState,
   reducers: {
+    replaceFeedPosts(state, action: PayloadAction<FeedPost[]>) {
+      const normalized = normalizePosts(action.payload);
+      state.postsById = normalized.postsById;
+      state.feedPostIds = normalized.feedPostIds;
+    },
     addPost(state, action: PayloadAction<FeedPost>) {
       const post = action.payload;
       state.postsById[post.id] = post;
       state.feedPostIds.unshift(post.id);
+    },
+    removePost(state, action: PayloadAction<{ postId: string }>) {
+      const { postId } = action.payload;
+      delete state.postsById[postId];
+      state.feedPostIds = state.feedPostIds.filter((id) => id !== postId);
+    },
+    updatePostInteraction(
+      state,
+      action: PayloadAction<{
+        postId: string;
+        likesCount?: number;
+        isLiked?: boolean;
+        isSaved?: boolean;
+      }>,
+    ) {
+      const post = state.postsById[action.payload.postId];
+      if (!post) return;
+      if (typeof action.payload.likesCount === "number") {
+        post.likesCount = action.payload.likesCount;
+      }
+      if (typeof action.payload.isLiked === "boolean") {
+        post.isLiked = action.payload.isLiked;
+      }
+      if (typeof action.payload.isSaved === "boolean") {
+        post.isSaved = action.payload.isSaved;
+      }
     },
     toggleLike(state, action: PayloadAction<{ postId: string }>) {
       const post = state.postsById[action.payload.postId];
@@ -115,6 +146,39 @@ const postsSlice = createSlice({
       });
       post.commentsCount = post.comments.length;
     },
+    addCommentFromServer(
+      state,
+      action: PayloadAction<{
+        postId: string;
+        id: string;
+        text: string;
+        parentId: string | null;
+        username: string;
+        avatarUrl: string | null;
+      }>,
+    ) {
+      const post = state.postsById[action.payload.postId];
+      if (!post) return;
+      post.comments.push({
+        id: action.payload.id,
+        text: action.payload.text,
+        parentId: action.payload.parentId,
+        username: action.payload.username,
+        avatarUrl:
+          action.payload.avatarUrl ?? "https://i.pravatar.cc/100?u=fallback",
+        postedAtLabel: "JUST NOW",
+      });
+      post.commentsCount = post.comments.length;
+    },
+    setPostComments(
+      state,
+      action: PayloadAction<{ postId: string; comments: PostComment[] }>,
+    ) {
+      const post = state.postsById[action.payload.postId];
+      if (!post) return;
+      post.comments = action.payload.comments;
+      post.commentsCount = action.payload.comments.length;
+    },
     syncPostAuthorUsername(
       state,
       action: PayloadAction<{
@@ -142,10 +206,15 @@ const postsSlice = createSlice({
 });
 
 export const {
+  replaceFeedPosts,
   addPost,
+  removePost,
+  updatePostInteraction,
   toggleLike,
   toggleSave,
   addComment,
+  addCommentFromServer,
+  setPostComments,
   syncPostAuthorUsername,
 } = postsSlice.actions;
 export default postsSlice.reducer;

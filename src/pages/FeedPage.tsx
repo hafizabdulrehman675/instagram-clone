@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Bookmark,
@@ -15,11 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { apiRequest } from "@/lib/api";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import {
-  addComment,
-  toggleLike,
-  toggleSave,
+  addCommentFromServer,
+  replaceFeedPosts,
+  setPostComments,
+  updatePostInteraction,
 } from "@/features/posts/redux/postsSlice";
 import type { FeedPost, PostComment, Story } from "@/features/posts/types";
 
@@ -36,6 +38,60 @@ const STORIES: ReadonlyArray<Story> = [
 // ── Instagram gradient ─────────────────────────────────────────────────────
 const IG_GRADIENT =
   "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)";
+
+type BackendPost = {
+  id: string | number;
+  authorId: string | number;
+  username: string;
+  avatarUrl: string | null;
+  location: string | null;
+  imageUrl: string;
+  likesCount: number;
+  caption: string;
+  commentsCount: number;
+  comments: Array<{
+    id: string | number;
+    parentId: string | number | null;
+    username: string;
+    avatarUrl: string | null;
+    text: string;
+  }>;
+  isLiked: boolean;
+  isSaved: boolean;
+};
+
+function mapBackendPostToFeedPost(post: BackendPost): FeedPost {
+  return {
+    id: String(post.id),
+    authorId: String(post.authorId),
+    username: post.username,
+    avatarUrl: post.avatarUrl ?? "https://i.pravatar.cc/100?u=fallback",
+    location: post.location ?? "",
+    imageUrl: post.imageUrl,
+    likesCount: post.likesCount,
+    caption: post.caption,
+    commentsCount: post.commentsCount,
+    comments: (post.comments || []).map((c) => ({
+      id: String(c.id),
+      parentId: c.parentId ? String(c.parentId) : null,
+      username: c.username,
+      avatarUrl: c.avatarUrl ?? "https://i.pravatar.cc/100?u=fallback",
+      text: c.text,
+      postedAtLabel: "JUST NOW",
+    })),
+    postedAtLabel: "JUST NOW",
+    isLiked: post.isLiked,
+    isSaved: post.isSaved,
+  };
+}
+
+type BackendComment = {
+  id: string | number;
+  text: string;
+  parentId?: string | number | null;
+  username: string;
+  avatarUrl: string | null;
+};
 
 // ── Story ring wrapper ─────────────────────────────────────────────────────
 function StoryRing({
@@ -183,13 +239,19 @@ function CommentTree({
 // ── Post card ──────────────────────────────────────────────────────────────
 type PostCardProps = {
   post: FeedPost;
-  onToggleLike: (postId: string) => void;
-  onToggleSave: (postId: string) => void;
+  onToggleLike: (postId: string) => Promise<void>;
+  onToggleSave: (postId: string) => Promise<void>;
+  onLoadComments: (postId: string) => Promise<void>;
 };
 
-function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
+function PostCard({
+  post,
+  onToggleLike,
+  onToggleSave,
+  onLoadComments,
+}: PostCardProps) {
   const dispatch = useAppDispatch();
-  const authUser = useAppSelector((s) => s.auth.user);
+  const authToken = useAppSelector((s) => s.auth.token);
   const [commentInput, setCommentInput] = useState<string>("");
   const [replyTo, setReplyTo] = useState<PostComment | null>(null);
   const [commentsVisible, setCommentsVisible] = useState(true);
@@ -198,28 +260,62 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
   const hasComments = comments.length > 0;
 
   function handleDoubleTap() {
-    if (!post.isLiked) onToggleLike(post.id);
+    if (!post.isLiked) {
+      void onToggleLike(post.id);
+    }
   }
 
-  function handlePostComment() {
+  async function handlePostComment() {
     const text = commentInput.trim();
-    if (!text) return;
-    dispatch(
-      addComment({
-        postId: post.id,
-        text,
-        parentId: replyTo?.id ?? null,
-        username: authUser?.username ?? "you",
-        avatarUrl: authUser?.avatarUrl ?? "https://i.pravatar.cc/100?u=you",
-      }),
-    );
+    if (!text || !authToken) return;
+
+    try {
+      const response = await apiRequest<{
+        data: {
+          comment: {
+            id: string | number;
+            text: string;
+            parentId: string | number | null;
+            username: string;
+            avatarUrl: string | null;
+          };
+        };
+      }>(`/api/posts/${post.id}/comments`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({
+          text,
+          parentId: replyTo?.id ?? null,
+        }),
+      });
+
+      dispatch(
+        addCommentFromServer({
+          postId: post.id,
+          id: String(response.data.comment.id),
+          text: response.data.comment.text,
+          parentId: response.data.comment.parentId
+            ? String(response.data.comment.parentId)
+            : null,
+          username: response.data.comment.username,
+          avatarUrl: response.data.comment.avatarUrl ?? null,
+        }),
+      );
+    } catch {
+      return;
+    }
+
     setCommentInput("");
     setReplyTo(null);
     setCommentsVisible(true);
   }
 
-  function toggleCommentsPanel() {
-    setCommentsVisible((v) => !v);
+  async function toggleCommentsPanel() {
+    const nextVisible = !commentsVisible;
+    setCommentsVisible(nextVisible);
+    if (nextVisible) {
+      await onLoadComments(post.id);
+    }
   }
 
   return (
@@ -295,7 +391,7 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => onToggleLike(post.id)}
+              onClick={() => void onToggleLike(post.id)}
               aria-label={post.isLiked ? "Unlike" : "Like"}
               className="h-auto min-h-0 w-auto cursor-pointer rounded-full bg-transparent p-0.5 text-inherit hover:bg-transparent hover:text-inherit aria-expanded:bg-transparent dark:hover:bg-transparent active:translate-y-0"
             >
@@ -314,7 +410,7 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
               type="button"
               variant="ghost"
               size="icon"
-              onClick={toggleCommentsPanel}
+              onClick={() => void toggleCommentsPanel()}
               aria-expanded={hasComments ? commentsVisible : undefined}
               aria-label={
                 hasComments
@@ -348,7 +444,7 @@ function PostCard({ post, onToggleLike, onToggleSave }: PostCardProps) {
             type="button"
             variant="ghost"
             size="icon"
-            onClick={() => onToggleSave(post.id)}
+            onClick={() => void onToggleSave(post.id)}
             aria-label={post.isSaved ? "Unsave" : "Save"}
             className="h-auto min-h-0 w-auto cursor-pointer rounded-full bg-transparent p-0.5 text-inherit hover:bg-transparent hover:text-inherit aria-expanded:bg-transparent dark:hover:bg-transparent active:translate-y-0"
           >
@@ -466,9 +562,33 @@ function FeedPage() {
   );
 
   const authUser = useAppSelector((s) => s.auth.user);
+  const authToken = useAppSelector((s) => s.auth.token);
   const followingByUserId = useAppSelector(
     (s) => s.social.followingByUserId,
   );
+
+  useEffect(() => {
+    async function loadFeed() {
+      if (!authToken) return;
+      try {
+        const response = await apiRequest<{ data: { posts: BackendPost[] } }>(
+          "/api/posts/feed",
+          {
+            headers: { Authorization: `Bearer ${authToken}` },
+          },
+        );
+        dispatch(
+          replaceFeedPosts(
+            (response.data.posts || []).map(mapBackendPostToFeedPost),
+          ),
+        );
+      } catch {
+        // Keep current state if feed request fails.
+      }
+    }
+
+    loadFeed();
+  }, [authToken, dispatch]);
 
   const posts = useMemo(() => {
     if (!authUser) return allPosts;
@@ -480,12 +600,107 @@ function FeedPage() {
     );
   }, [allPosts, authUser, followingByUserId]);
 
-  function handleToggleLike(postId: string) {
-    dispatch(toggleLike({ postId }));
+  async function handleToggleLike(postId: string) {
+    if (!authToken) return;
+    const post = allPosts.find((p) => p.id === postId);
+    if (!post) return;
+
+    try {
+      if (post.isLiked) {
+        const response = await apiRequest<{
+          data: { likesCount: number; isLiked: boolean };
+        }>(`/api/posts/${postId}/like`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        dispatch(
+          updatePostInteraction({
+            postId,
+            likesCount: response.data.likesCount,
+            isLiked: response.data.isLiked,
+          }),
+        );
+      } else {
+        const response = await apiRequest<{
+          data: { likesCount: number; isLiked: boolean };
+        }>(`/api/posts/${postId}/like`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        dispatch(
+          updatePostInteraction({
+            postId,
+            likesCount: response.data.likesCount,
+            isLiked: response.data.isLiked,
+          }),
+        );
+      }
+    } catch {
+      // Ignore transient failure; UI stays consistent with store.
+    }
   }
 
-  function handleToggleSave(postId: string) {
-    dispatch(toggleSave({ postId }));
+  async function handleToggleSave(postId: string) {
+    if (!authToken) return;
+    const post = allPosts.find((p) => p.id === postId);
+    if (!post) return;
+
+    try {
+      if (post.isSaved) {
+        const response = await apiRequest<{
+          data: { isSaved: boolean };
+        }>(`/api/posts/${postId}/save`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        dispatch(updatePostInteraction({ postId, isSaved: response.data.isSaved }));
+      } else {
+        const response = await apiRequest<{
+          data: { isSaved: boolean };
+        }>(`/api/posts/${postId}/save`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        dispatch(updatePostInteraction({ postId, isSaved: response.data.isSaved }));
+      }
+    } catch {
+      // Ignore transient failure; UI stays consistent with store.
+    }
+  }
+
+  async function handleLoadComments(postId: string) {
+    try {
+      const commentsResponse = await apiRequest<{
+        data: { comments: BackendComment[] };
+      }>(`/api/posts/${postId}/comments`);
+
+      const topLevel = commentsResponse.data.comments || [];
+      const repliesResults = await Promise.all(
+        topLevel.map(async (comment) => {
+          try {
+            const repliesResponse = await apiRequest<{
+              data: { replies: BackendComment[] };
+            }>(`/api/posts/${postId}/comments/${comment.id}/replies`);
+            return repliesResponse.data.replies || [];
+          } catch {
+            return [];
+          }
+        }),
+      );
+
+      const merged = [...topLevel, ...repliesResults.flat()].map((c) => ({
+        id: String(c.id),
+        parentId: c.parentId ? String(c.parentId) : null,
+        username: c.username,
+        avatarUrl: c.avatarUrl ?? "https://i.pravatar.cc/100?u=fallback",
+        text: c.text,
+        postedAtLabel: "JUST NOW",
+      }));
+
+      dispatch(setPostComments({ postId, comments: merged }));
+    } catch {
+      // Keep existing comments state if loading fails.
+    }
   }
 
   return (
@@ -531,6 +746,7 @@ function FeedPage() {
                 post={post}
                 onToggleLike={handleToggleLike}
                 onToggleSave={handleToggleSave}
+                onLoadComments={handleLoadComments}
               />
             ))
           )}

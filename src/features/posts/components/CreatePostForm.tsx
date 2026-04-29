@@ -1,6 +1,7 @@
 import { useFormik } from "formik";
 import * as Yup from "yup";
 
+import { apiRequest } from "@/lib/api";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { addPost } from "@/features/posts/redux/postsSlice";
 import type { FeedPost } from "@/features/posts/types";
@@ -29,6 +30,7 @@ const CreatePostSchema = Yup.object({
 function CreatePostForm({ onSuccess, onCancel }: CreatePostFormProps) {
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((s) => s.auth.user);
+  const authToken = useAppSelector((s) => s.auth.token);
 
   const formik = useFormik({
     initialValues: {
@@ -37,34 +39,60 @@ function CreatePostForm({ onSuccess, onCancel }: CreatePostFormProps) {
       location: "",
     },
     validationSchema: CreatePostSchema,
-    onSubmit: (values, { setStatus, resetForm, setSubmitting }) => {
-      if (!authUser) {
+    onSubmit: async (values, { setStatus, resetForm, setSubmitting }) => {
+      if (!authUser || !authToken) {
         setStatus("You must be logged in.");
         setSubmitting(false);
         return;
       }
 
-      const newPost: FeedPost = {
-        id: `p_${Date.now()}`,
-        authorId: authUser.id,
-        username: authUser.username,
-        avatarUrl: authUser.avatarUrl,
-        location: values.location.trim(),
-        imageUrl: values.imageUrl.trim(),
-        likesCount: 0,
-        caption: values.caption.trim(),
-        commentsCount: 0,
-        comments: [],
-        postedAtLabel: "JUST NOW",
-        isLiked: false,
-        isSaved: false,
-      };
+      try {
+        const response = await apiRequest<{
+          data: {
+            post: {
+              id: string | number;
+              userId: string | number;
+              imageUrl: string;
+              caption: string | null;
+              location: string | null;
+            };
+          };
+        }>("/api/posts", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({
+            imageUrl: values.imageUrl.trim(),
+            caption: values.caption.trim(),
+            location: values.location.trim(),
+          }),
+        });
 
-      dispatch(addPost(newPost));
-      resetForm();
-      setStatus(undefined);
-      onSuccess?.();
-      setSubmitting(false);
+        const created = response.data.post;
+        const newPost: FeedPost = {
+          id: String(created.id),
+          authorId: String(created.userId),
+          username: authUser.username,
+          avatarUrl: authUser.avatarUrl ?? "https://i.pravatar.cc/100?u=fallback",
+          location: created.location ?? "",
+          imageUrl: created.imageUrl,
+          likesCount: 0,
+          caption: created.caption ?? "",
+          commentsCount: 0,
+          comments: [],
+          postedAtLabel: "JUST NOW",
+          isLiked: false,
+          isSaved: false,
+        };
+
+        dispatch(addPost(newPost));
+        resetForm();
+        setStatus(undefined);
+        onSuccess?.();
+      } catch {
+        setStatus("Unable to create post right now.");
+      } finally {
+        setSubmitting(false);
+      }
     },
   });
 
