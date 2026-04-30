@@ -9,6 +9,8 @@ import { saveSession } from "@/lib/session";
 import { useAppDispatch } from "@/app/hooks";
 import { loginSuccess } from "@/features/auth/redux/authSlice";
 import type { AuthUser } from "@/features/auth/types";
+import type { SocialState } from "@/features/social/types";
+import { replaceSocialState } from "@/features/social/redux/socialSlice";
 
 // ── Yup validation schema ──────────────────────────────────────────────────
 const LoginSchema = Yup.object({
@@ -56,6 +58,27 @@ function LoginPage() {
         };
 
         dispatch(loginSuccess({ user: authUser, token: response.token }));
+        try {
+          let socialResponse;
+          try {
+            socialResponse = await apiRequest<{ data: SocialState }>(
+              "/api/social/me",
+              {
+                headers: { Authorization: `Bearer ${response.token}` },
+              },
+            );
+          } catch {
+            socialResponse = await apiRequest<{ data: SocialState }>(
+              "/api/social/state",
+              {
+                headers: { Authorization: `Bearer ${response.token}` },
+              },
+            );
+          }
+          dispatch(replaceSocialState(socialResponse.data));
+        } catch {
+          // Keep flow alive even if social pre-hydration fails.
+        }
         saveSession(authUser.id, response.token);
         navigate("/");
       } catch (error) {

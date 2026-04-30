@@ -77,6 +77,11 @@ function ConvoItem({
 }) {
   const last = convo.messages.at(-1);
   const isLastMine = last?.senderId === myId;
+  const previewText = last
+    ? `${isLastMine ? "You: " : ""}${last.text}`
+    : convo.unreadCount > 0
+      ? `${convo.unreadCount} new message${convo.unreadCount > 1 ? "s" : ""}`
+      : "No messages yet";
 
   return (
     <button
@@ -114,8 +119,7 @@ function ConvoItem({
           <p
             className={`truncate text-[13px] ${convo.unreadCount > 0 ? "font-semibold text-zinc-900" : "text-zinc-500"}`}
           >
-            {isLastMine && <span className="mr-0.5">You:</span>}
-            {last?.text ?? "No messages yet"}
+            {previewText}
           </p>
           {convo.unreadCount > 0 && (
             <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-[11px] font-bold text-white">

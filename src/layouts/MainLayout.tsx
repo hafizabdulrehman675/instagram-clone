@@ -36,6 +36,7 @@ import { replaceUsers } from "@/features/users/redux/usersSlice";
 import {
   acceptFollowRequest,
   cancelFollowRequest,
+  clearSocialState,
   removeFriendship,
   rejectFollowRequest,
   replaceSocialState,
@@ -216,7 +217,14 @@ function SuggestedUserRow({
                   }),
                 );
               } catch {
-                // keep current state on error
+                try {
+                  const sync = await apiRequest<{ data: SocialState }>("/api/social/me", {
+                    headers: { Authorization: `Bearer ${authToken}` },
+                  });
+                  dispatch(replaceSocialState(sync.data));
+                } catch {
+                  // keep current state on error
+                }
               }
             }}
           >
@@ -260,7 +268,9 @@ function SuggestedUserRow({
             onClick={async () => {
               if (!authToken) return;
               try {
-                await apiRequest(`/api/social/follow/${u.id}`, {
+                const response = await apiRequest<{
+                  data: { requestId: string | number; status: string };
+                }>(`/api/social/follow/${u.id}`, {
                   method: "POST",
                   headers: { Authorization: `Bearer ${authToken}` },
                 });
@@ -268,6 +278,7 @@ function SuggestedUserRow({
                   sendFollowRequest({
                     fromUserId: authUser.id,
                     toUserId: u.id,
+                    requestId: String(response.data.requestId),
                   }),
                 );
                 dispatch(setActiveModal("followRequestSent"));
@@ -414,16 +425,24 @@ function MainLayout() {
 
   useEffect(() => {
     async function loadSocialStateFromBackend() {
-      if (!authUser || !authToken) return;
+      if (!authUser || !authToken) {
+        dispatch(clearSocialState());
+        return;
+      }
       try {
-        const response = await apiRequest<{
-          data: SocialState;
-        }>("/api/social/me", {
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
+        let response;
+        try {
+          response = await apiRequest<{ data: SocialState }>("/api/social/me", {
+            headers: { Authorization: `Bearer ${authToken}` },
+          });
+        } catch {
+          response = await apiRequest<{ data: SocialState }>("/api/social/state", {
+            headers: { Authorization: `Bearer ${authToken}` },
+          });
+        }
         dispatch(replaceSocialState(response.data));
       } catch {
-        // Keep current social state when backend sync fails.
+        // Keep existing social state when sync request fails transiently.
       }
     }
 
@@ -467,6 +486,7 @@ function MainLayout() {
 
   function handleLogout() {
     dispatch(logout());
+    dispatch(clearSocialState());
     clearSession();
     navigate("/login");
   }

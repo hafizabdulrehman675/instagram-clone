@@ -24,10 +24,12 @@ import { apiRequest } from "@/lib/api";
 import { setActiveModal } from "@/features/ui/redux/uiSlice";
 import { removePost } from "@/features/posts/redux/postsSlice";
 import {
+  replaceSocialState,
   sendFollowRequest,
   cancelFollowRequest,
   unfollow,
 } from "@/features/social/redux/socialSlice";
+import type { SocialState } from "@/features/social/types";
 
 /* ─── Highlight bubble ──────────────────────────────────────────── */
 const HIGHLIGHTS = [
@@ -237,9 +239,13 @@ function ProfilePage() {
     if (!authUser || !profileUser || isOwnProfile) return "self" as const;
     const following = social.followingByUserId[authUser.id] ?? [];
     if (following.includes(profileUser.id)) return "following" as const;
-    const id = `fr_${authUser.id}_${profileUser.id}`;
-    const req = social.requestsById[id];
-    if (req?.status === "pending") return "requested" as const;
+    const req = Object.values(social.requestsById).find(
+      (r) =>
+        r.status === "pending" &&
+        r.fromUserId === authUser.id &&
+        r.toUserId === profileUser.id,
+    );
+    if (req) return "requested" as const;
     return "none" as const;
   }, [authUser, profileUser, isOwnProfile, social]);
 
@@ -374,7 +380,9 @@ function ProfilePage() {
     if (followStatus === "none") {
       if (!authToken) return;
       try {
-        await apiRequest(`/api/social/follow/${profileUser.id}`, {
+        const response = await apiRequest<{
+          data: { requestId: string | number; status: string };
+        }>(`/api/social/follow/${profileUser.id}`, {
           method: "POST",
           headers: { Authorization: `Bearer ${authToken}` },
         });
@@ -382,11 +390,21 @@ function ProfilePage() {
           sendFollowRequest({
             fromUserId: authUser.id,
             toUserId: profileUser.id,
+            requestId: String(response.data.requestId),
           }),
         );
         dispatch(setActiveModal("followRequestSent"));
       } catch {
-        // keep current state on error
+        if (authToken) {
+          try {
+            const sync = await apiRequest<{ data: SocialState }>("/api/social/me", {
+              headers: { Authorization: `Bearer ${authToken}` },
+            });
+            dispatch(replaceSocialState(sync.data));
+          } catch {
+            // keep current state on error
+          }
+        }
       }
     } else if (followStatus === "requested") {
       if (!authToken) return;

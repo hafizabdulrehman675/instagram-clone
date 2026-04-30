@@ -41,23 +41,37 @@ const socialSlice = createSlice({
   name: "social",
   initialState,
   reducers: {
+    clearSocialState(state) {
+      state.followingByUserId = {};
+      state.requestsById = {};
+    },
     replaceSocialState(state, action: PayloadAction<SocialState>) {
       state.followingByUserId = action.payload.followingByUserId;
       state.requestsById = action.payload.requestsById;
     },
     sendFollowRequest(
       state,
-      action: PayloadAction<{ fromUserId: string; toUserId: string }>,
+      action: PayloadAction<{
+        fromUserId: string;
+        toUserId: string;
+        requestId?: string;
+      }>,
     ) {
-      const { fromUserId, toUserId } = action.payload;
+      const { fromUserId, toUserId, requestId } = action.payload;
       if (fromUserId === toUserId) return;
 
       const following = state.followingByUserId[fromUserId] ?? [];
       if (following.includes(toUserId)) return;
 
-      const id = requestPairId(fromUserId, toUserId);
-      const existing = state.requestsById[id];
-      if (existing?.status === "pending") return;
+      const existing = Object.values(state.requestsById).find(
+        (req) =>
+          req.status === "pending" &&
+          req.fromUserId === fromUserId &&
+          req.toUserId === toUserId,
+      );
+      if (existing) return;
+
+      const id = requestId ?? requestPairId(fromUserId, toUserId);
 
       state.requestsById[id] = {
         id,
@@ -136,6 +150,7 @@ const socialSlice = createSlice({
 });
 
 export const {
+  clearSocialState,
   replaceSocialState,
   sendFollowRequest,
   acceptFollowRequest,
