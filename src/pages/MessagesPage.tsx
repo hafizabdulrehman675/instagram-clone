@@ -18,7 +18,6 @@ import {
   messageAcked,
   messageSentOptimistic,
   readCursorUpdated,
-  startThread,
   threadRead,
   toggleMessageReaction,
   upsertMessagesFromServer,
@@ -469,20 +468,10 @@ function MessagesPage() {
         void openConvo(response.data.thread.id);
         return;
       } catch {
-        // Fallback to local thread creation below.
+        // Keep backend as source of truth. Avoid creating local-only threads.
+        return;
       }
     }
-
-    const peer: ThreadPeer = {
-      id: userRecord.id,
-      username: userRecord.username,
-      fullName: userRecord.fullName,
-      avatarUrl: userRecord.avatarUrl,
-      isOnline: false,
-    };
-    const threadId = `t_${myId}_${userId}`;
-    dispatch(startThread({ threadId, peer, myUserId: myId }));
-    void openConvo(threadId);
   }
 
   /** Contacts from social graph that don't yet have an active thread. */

@@ -26,9 +26,13 @@ export async function apiRequest<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    cache: "no-store",
     ...options,
     headers: {
       "Content-Type": "application/json",
+      "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
       ...(options.headers || {}),
     },
   });

@@ -520,12 +520,13 @@ function MainLayout() {
               <Heart size={23} strokeWidth={2} />
               <NotificationBadge count={followActivityBadgeCount} />
             </NavLink>
-            <button
+            <NavLink
+              to="/messages"
               aria-label="Messages"
               className="rounded-full p-1.5 transition-colors hover:bg-zinc-100 active:scale-95"
             >
               <MessageCircle size={23} strokeWidth={2} />
-            </button>
+            </NavLink>
           </div>
         </div>
       </header>

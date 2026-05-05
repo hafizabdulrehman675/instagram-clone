@@ -44,56 +44,11 @@ function upsertThread(state: MessagesState, thread: ThreadEntity) {
   }
 }
 
-function seedMessages(): MessagesState {
-  const threadsById: Record<string, ThreadEntity> = {
-    t1: {
-      id: "t1",
-      peer: {
-        id: "u2",
-        username: "second_user",
-        fullName: "Second User",
-        avatarUrl: "https://i.pravatar.cc/100?u=second",
-        isOnline: true,
-      },
-      participantIds: ["u1", "u2"],
-      messageIds: ["m1", "m2", "m3"],
-      unreadCountByUserId: { u1: 1, u2: 0 },
-    },
-  };
-
-  const messagesById: Record<string, MessageEntity> = {
-    m1: {
-      id: "m1",
-      threadId: "t1",
-      senderId: "u2",
-      text: "Hey! Saw your latest post.",
-      createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    },
-    m2: {
-      id: "m2",
-      threadId: "t1",
-      senderId: "u1",
-      text: "Thanks! Working hard on this clone.",
-      createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      seen: true,
-    },
-    m3: {
-      id: "m3",
-      threadId: "t1",
-      senderId: "u2",
-      text: "Looks great. Let's collab soon.",
-      createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    },
-  };
-
-  return {
-    threadsById,
-    threadIds: ["t1"],
-    messagesById,
-  };
-}
-
-const initialState: MessagesState = seedMessages();
+const initialState: MessagesState = {
+  threadsById: {},
+  threadIds: [],
+  messagesById: {},
+};
 
 const messagesSlice = createSlice({
   name: "messages",

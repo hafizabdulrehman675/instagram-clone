@@ -12,14 +12,14 @@ type NotificationItem = {
   username: string;
   userAvatarUrl: string;
   text: string;
-  type: "incomingRequest" | "outgoingRequest" | "followingYou";
+  type: "incomingRequest" | "outgoingRequest" | "followingYou" | "message";
   isRead?: boolean;
   createdAt?: string;
 };
 
 type BackendNotification = {
   id: string | number;
-  type: "like" | "comment" | "follow" | "follow_request";
+  type: "like" | "comment" | "follow" | "follow_request" | "message";
   isRead: boolean;
   createdAt: string;
   sender: {
@@ -32,6 +32,8 @@ type BackendNotification = {
 function NotificationIcon({ type }: { type: NotificationItem["type"] }) {
   if (type === "incomingRequest")
     return <Heart className="h-4 w-4 text-pink-500" />;
+  if (type === "message")
+    return <Send className="h-4 w-4 text-blue-500" />;
   if (type === "outgoingRequest")
     return <Send className="h-4 w-4 text-blue-500" />;
   return <UserPlus className="h-4 w-4 text-green-600" />;
@@ -41,11 +43,12 @@ function NotificationsPage() {
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((s) => s.auth.user);
   const social = useAppSelector((s) => s.social);
-  const usersById = useAppSelector((s) => s.users.usersById);
   const authToken = useAppSelector((s) => s.auth.token);
   const [backendNotifications, setBackendNotifications] = useState<
     NotificationItem[]
   >([]);
+  const [isLoadingBackend, setIsLoadingBackend] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
 
   const followActivityCount = useMemo(() => {
     if (!authUser) return 0;
@@ -54,72 +57,16 @@ function NotificationsPage() {
     ).length;
   }, [authUser, social.requestsById]);
 
-  const notifications = useMemo((): NotificationItem[] => {
-    if (backendNotifications.length > 0) return backendNotifications;
-    if (!authUser) return [];
-
-    // Keep one "best" notification per user to avoid stale/conflicting entries.
-    // Priority: incoming request > outgoing request > already following you.
-    const byUserId = new Map<string, NotificationItem>();
-
-    for (const req of Object.values(social.requestsById)) {
-      if (req.status !== "pending") continue;
-      if (req.toUserId === authUser.id) {
-        const from = usersById[req.fromUserId];
-        byUserId.set(req.fromUserId, {
-          id: `incoming_${req.id}`,
-          username: from?.username ?? "unknown_user",
-          userAvatarUrl: from?.avatarUrl ?? "https://i.pravatar.cc/100?u=unknown",
-          text: "requested to follow you.",
-          type: "incomingRequest",
-        });
-      }
-    }
-
-    for (const req of Object.values(social.requestsById)) {
-      if (req.status !== "pending") continue;
-      if (req.fromUserId !== authUser.id) continue;
-      if (byUserId.has(req.toUserId)) continue;
-      const to = usersById[req.toUserId];
-      byUserId.set(req.toUserId, {
-        id: `outgoing_${req.id}`,
-        username: to?.username ?? "unknown_user",
-        userAvatarUrl: to?.avatarUrl ?? "https://i.pravatar.cc/100?u=unknown",
-        text: "has not accepted your follow request yet.",
-        type: "outgoingRequest",
-      });
-    }
-
-    for (const [followerId, followingIds] of Object.entries(
-      social.followingByUserId,
-    )) {
-      if (followerId === authUser.id) continue;
-      if (!followingIds.includes(authUser.id)) continue;
-      if (byUserId.has(followerId)) continue;
-      const from = usersById[followerId];
-      byUserId.set(followerId, {
-        id: `follower_${followerId}`,
-        username: from?.username ?? "unknown_user",
-        userAvatarUrl: from?.avatarUrl ?? "https://i.pravatar.cc/100?u=unknown",
-        text: "is following you.",
-        type: "followingYou",
-      });
-    }
-
-    const order: Record<NotificationItem["type"], number> = {
-      incomingRequest: 0,
-      outgoingRequest: 1,
-      followingYou: 2,
-    };
-
-    return Array.from(byUserId.values()).sort(
-      (a, b) => order[a.type] - order[b.type],
-    );
-  }, [authUser, social.followingByUserId, social.requestsById, usersById]);
+  const notifications = useMemo(
+    () => backendNotifications,
+    [backendNotifications],
+  );
 
   useEffect(() => {
     async function loadNotifications() {
       if (!authToken) return;
+      setIsLoadingBackend(true);
+      setBackendError(null);
 
       try {
         const response = await apiRequest<{
@@ -136,6 +83,7 @@ function NotificationsPage() {
                 follow: "followingYou",
                 like: "followingYou",
                 comment: "outgoingRequest",
+                message: "message",
               };
 
             const textMap: Record<BackendNotification["type"], string> = {
@@ -143,6 +91,7 @@ function NotificationsPage() {
               follow: "is following you.",
               like: "liked your post.",
               comment: "commented on your post.",
+              message: "sent you a message.",
             };
 
             return {
@@ -160,11 +109,28 @@ function NotificationsPage() {
 
         setBackendNotifications(mapped);
       } catch {
-        // Keep fallback local activity notifications if backend fetch fails.
+        // Keep previous backend notifications visible on transient failures.
+        setBackendError("Could not refresh notifications right now.");
+      } finally {
+        setIsLoadingBackend(false);
       }
     }
 
-    loadNotifications();
+    void loadNotifications();
+
+    const intervalId = window.setInterval(() => {
+      void loadNotifications();
+    }, 10000);
+
+    const onFocus = () => {
+      void loadNotifications();
+    };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [authToken]);
 
   async function handleNotificationClick(itemId: string, isRead?: boolean) {
@@ -198,22 +164,55 @@ function NotificationsPage() {
     }
   }
 
+  async function handleDeleteAll() {
+    if (!authToken || backendNotifications.length === 0) return;
+    try {
+      await apiRequest("/api/notifications/all", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setBackendNotifications([]);
+    } catch {
+      setBackendError("Could not delete notifications right now.");
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-[630px] space-y-4 px-1 py-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold" style={{ color: "black" }}>
           Notifications
         </h1>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => void handleMarkAllRead()}
-          disabled={backendNotifications.length === 0}
-        >
-          Mark all read
-        </Button>
+        <div className="flex items-center gap-2">
+          {isLoadingBackend ? (
+            <span className="text-xs text-zinc-500">Refreshing...</span>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleMarkAllRead()}
+            disabled={backendNotifications.length === 0}
+          >
+            Mark all read
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleDeleteAll()}
+            disabled={backendNotifications.length === 0}
+          >
+            Delete all
+          </Button>
+        </div>
       </div>
+
+      {backendError ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {backendError}
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between rounded-md border border-zinc-200 bg-white px-4 py-3">
         <div>

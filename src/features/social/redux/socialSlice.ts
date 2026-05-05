@@ -25,17 +25,10 @@ function requestPairId(fromUserId: string, toUserId: string) {
   return `fr_${fromUserId}_${toUserId}`;
 }
 
-function seedSocial(): SocialState {
-  return {
-    followingByUserId: {
-      u1: ["u2"],
-      u2: ["u1"],
-    },
-    requestsById: {},
-  };
-}
-
-const initialState: SocialState = seedSocial();
+const initialState: SocialState = {
+  followingByUserId: {},
+  requestsById: {},
+};
 
 const socialSlice = createSlice({
   name: "social",
@@ -142,9 +135,8 @@ const socialSlice = createSlice({
 
     // Keeps previous reducer API, now resets in-memory state only.
     resetDemoSocial(state) {
-      const seeded = seedSocial();
-      state.followingByUserId = seeded.followingByUserId;
-      state.requestsById = seeded.requestsById;
+      state.followingByUserId = {};
+      state.requestsById = {};
     },
   },
 });
